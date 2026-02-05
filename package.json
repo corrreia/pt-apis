@@ -1,0 +1,16 @@
+{
+	"name": "pt-apis",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy --minify",
+		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
+	},
+	"dependencies": {
+		"hono": "^4.11.7"
+	},
+	"devDependencies": {
+		"@types/node": "^25.2.1",
+		"wrangler": "^4.63.0"
+	}
+}
