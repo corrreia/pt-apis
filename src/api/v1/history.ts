@@ -12,14 +12,14 @@ import { ErroSchema, PaginacaoSchema } from "../schemas";
 
 const HistoryItemSchema = z
   .object({
-    id: z.number().openapi({ description: "Unique record identifier" }),
-    metric: z.string().openapi({ description: "Metric name", example: "temperature_max" }),
-    entityId: z.string().openapi({ description: "Entity identifier", example: "lisboa" }),
-    locationId: z.string().nullable().openapi({ description: "Associated location identifier" }),
-    value: z.number().openapi({ description: "Numeric metric value", example: 18.2 }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Additional JSON metadata" }),
-    observedAt: z.string().openapi({ description: "Observation time (ISO 8601)" }),
-    ingestedAt: z.string().openapi({ description: "Ingestion time in system (ISO 8601)" }),
+    id: z.number().openapi({ description: "Identificador único do registo" }),
+    metric: z.string().openapi({ description: "Nome da métrica", example: "temperature_max" }),
+    entityId: z.string().openapi({ description: "Identificador da entidade", example: "lisboa" }),
+    locationId: z.string().nullable().openapi({ description: "Identificador da localização associada" }),
+    value: z.number().openapi({ description: "Valor numérico da métrica", example: 18.2 }),
+    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
+    observedAt: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
+    ingestedAt: z.string().openapi({ description: "Hora de ingestão no sistema (ISO 8601)" }),
   })
   .openapi("HistoryItem");
 
@@ -31,14 +31,14 @@ const getHistory = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}/history",
   tags: ["History"],
-  summary: "Query historical time series data",
+  summary: "Consultar séries temporais históricas",
   description:
-    "Returns historical data points for a source within a time range, with pagination. Enables time-travel and trend analysis.",
+    "Devolve pontos históricos de uma fonte num intervalo de tempo, com paginação. Permite time-travel e análise de tendências.",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "ipma-weather",
       }),
     }),
@@ -48,7 +48,7 @@ const getHistory = createRoute({
         .optional()
         .openapi({
           param: { name: "metric", in: "query" },
-          description: "Filter by metric name",
+          description: "Filtrar por nome da métrica",
           example: "temperature_max",
         }),
       entityId: z
@@ -56,7 +56,7 @@ const getHistory = createRoute({
         .optional()
         .openapi({
           param: { name: "entityId", in: "query" },
-          description: "Filter by entity identifier",
+          description: "Filtrar por identificador da entidade",
           example: "lisboa",
         }),
       from: z
@@ -64,7 +64,7 @@ const getHistory = createRoute({
         .optional()
         .openapi({
           param: { name: "from", in: "query" },
-          description: "Start of time range (ISO 8601)",
+          description: "Início do intervalo (ISO 8601)",
           example: "2026-01-01T00:00:00Z",
         }),
       to: z
@@ -72,7 +72,7 @@ const getHistory = createRoute({
         .optional()
         .openapi({
           param: { name: "to", in: "query" },
-          description: "End of time range (ISO 8601)",
+          description: "Fim do intervalo (ISO 8601)",
           example: "2026-02-05T00:00:00Z",
         }),
       limit: z.coerce
@@ -83,7 +83,7 @@ const getHistory = createRoute({
         .default(100)
         .openapi({
           param: { name: "limit", in: "query" },
-          description: "Maximum results per page",
+          description: "Máximo de resultados por página",
           example: 100,
         }),
       offset: z.coerce
@@ -93,7 +93,7 @@ const getHistory = createRoute({
         .default(0)
         .openapi({
           param: { name: "offset", in: "query" },
-          description: "Pagination offset",
+          description: "Desvio da paginação",
           example: 0,
         }),
     }),
@@ -108,11 +108,11 @@ const getHistory = createRoute({
           }),
         },
       },
-      description: "Historical data with pagination",
+      description: "Dados históricos com paginação",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Source not found",
+      description: "Fonte não encontrada",
     },
   },
 });

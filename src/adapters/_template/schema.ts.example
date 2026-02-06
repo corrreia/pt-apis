@@ -1,0 +1,54 @@
+/**
+ * Example: Custom adapter schema.
+ *
+ * If your data doesn't fit the generic timeseries/documents/snapshots model,
+ * define your own Drizzle tables here. The Drizzle config glob
+ * (src/adapters/*/schema.ts) picks these up automatically for migration
+ * generation.
+ *
+ * Rename this file to `schema.ts` to activate it.
+ *
+ * Tips:
+ *   - Prefix your table names with the adapter id to avoid collisions
+ *     (e.g. "cp_stations" instead of just "stations").
+ *   - You can reference the shared `locations` table via locationId columns.
+ *   - Import and use these tables directly in your adapter.ts and routes.
+ */
+
+import { sqliteTable, integer, text, real, index } from "drizzle-orm/sqlite-core";
+
+// Example: a train stations table for a CP Comboios adapter
+export const cpStations = sqliteTable(
+  "cp_stations",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    locationId: text("location_id"), // FK to shared locations table
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    line: text("line"), // e.g. "Linha do Norte"
+    metadata: text("metadata"), // JSON
+  },
+  (table) => ({
+    lineIdx: index("cp_stations_line_idx").on(table.line),
+  }),
+);
+
+// Example: a departures table
+export const cpDepartures = sqliteTable(
+  "cp_departures",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stationId: text("station_id").notNull(),
+    trainNumber: text("train_number").notNull(),
+    destination: text("destination").notNull(),
+    scheduledAt: integer("scheduled_at", { mode: "timestamp" }).notNull(),
+    actualAt: integer("actual_at", { mode: "timestamp" }),
+    delayMinutes: integer("delay_minutes"),
+    status: text("status"), // "on-time", "delayed", "cancelled"
+    capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => ({
+    stationIdx: index("cp_dep_station_idx").on(table.stationId, table.scheduledAt),
+  }),
+);

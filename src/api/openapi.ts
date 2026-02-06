@@ -10,13 +10,13 @@ import { registry } from "../core/registry";
  */
 export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Bindings: Env }>) {
   const coreTags = [
-    { name: "Sources", description: "Discover available data sources (adapters)" },
-    { name: "Realtime", description: "Latest values per data source" },
-    { name: "History", description: "Historical time series with time-travel" },
-    { name: "Documents", description: "PDFs, CSVs and other files stored in R2" },
-    { name: "Snapshots", description: "Point-in-time JSON snapshots for time-travel" },
-    { name: "Search", description: "Cross-source search" },
-    { name: "Locations", description: "Shared location model and data by location" },
+    { name: "Sources", description: "Descobrir fontes de dados disponíveis (adapters)" },
+    { name: "Realtime", description: "Valores mais recentes por fonte" },
+    { name: "History", description: "Séries temporais históricas com time-travel" },
+    { name: "Documents", description: "PDFs, CSVs e outros ficheiros armazenados em R2" },
+    { name: "Snapshots", description: "Snapshots JSON num momento no tempo" },
+    { name: "Search", description: "Pesquisa entre todas as fontes" },
+    { name: "Locations", description: "Modelo de localizações partilhado e dados por local" },
   ];
 
   const adapterTags = registry.getAll().map((a) => ({
@@ -29,7 +29,7 @@ export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Binding
     info: {
       title: "Portugal Public Data API",
       description:
-        "Open API that aggregates, caches and serves public data from Portuguese government and institutional sources. Supports real-time data, historical time series, documents and snapshots. Each adapter can define its own data models and custom endpoints.",
+        "API aberta que agrega, faz cache e serve dados públicos de fontes governamentais e institucionais portuguesas. Suporta dados em tempo real, séries temporais históricas, documentos e snapshots. Cada adapter pode definir os seus próprios modelos e endpoints.",
       version: "1.0.0",
       contact: {
         name: "PT APIs Contributors",
@@ -40,8 +40,8 @@ export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Binding
       },
     },
     servers: [
-      { url: "https://pt-apis.corrreia.workers.dev", description: "Production" },
-      { url: "http://localhost:8787", description: "Local development" },
+      { url: "https://pt-apis.corrreia.workers.dev", description: "Produção" },
+      { url: "http://localhost:8787", description: "Desenvolvimento local" },
     ],
     tags: [...coreTags, ...adapterTags],
   });
@@ -51,7 +51,7 @@ export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Binding
     Scalar({
       url: "/doc",
       theme: "kepler",
-      pageTitle: "Portugal Public Data API — Reference",
+      pageTitle: "Portugal Public Data API — Referência",
     }),
   );
 }

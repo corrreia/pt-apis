@@ -12,13 +12,13 @@ import { ErroSchema } from "../schemas";
 
 const DocumentSchema = z
   .object({
-    id: z.string().openapi({ description: "Unique document identifier" }),
-    name: z.string().openapi({ description: "File name" }),
-    contentType: z.string().openapi({ description: "File MIME type", example: "application/pdf" }),
-    sizeBytes: z.number().nullable().openapi({ description: "File size in bytes" }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Additional JSON metadata" }),
-    capturedAt: z.string().openapi({ description: "Capture time (ISO 8601)" }),
-    downloadUrl: z.string().openapi({ description: "URL to download the document" }),
+    id: z.string().openapi({ description: "Identificador único do documento" }),
+    name: z.string().openapi({ description: "Nome do ficheiro" }),
+    contentType: z.string().openapi({ description: "Tipo MIME do ficheiro", example: "application/pdf" }),
+    sizeBytes: z.number().nullable().openapi({ description: "Tamanho do ficheiro em bytes" }),
+    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
+    capturedAt: z.string().openapi({ description: "Hora de captura (ISO 8601)" }),
+    downloadUrl: z.string().openapi({ description: "URL para descarregar o documento" }),
   })
   .openapi("Document");
 
@@ -30,26 +30,26 @@ const listDocuments = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}/documents",
   tags: ["Documents"],
-  summary: "List documents for a source",
+  summary: "Listar documentos de uma fonte",
   description:
-    "Returns metadata for all documents captured by this data source. Documents are files stored in R2 (PDFs, CSVs, etc.).",
+    "Devolve metadados de todos os documentos capturados por esta fonte. Os documentos são ficheiros armazenados em R2 (PDFs, CSVs, etc.).",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "dados-gov",
       }),
     }),
     query: z.object({
       limit: z.coerce.number().int().min(1).max(100).default(50).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 50,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -61,11 +61,11 @@ const listDocuments = createRoute({
           schema: z.object({ data: z.array(DocumentSchema) }),
         },
       },
-      description: "List of documents",
+      description: "Lista de documentos",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Source not found",
+      description: "Fonte não encontrada",
     },
   },
 });
@@ -74,30 +74,30 @@ const getDocument = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}/documents/{docId}",
   tags: ["Documents"],
-  summary: "Download a document",
+  summary: "Descarregar um documento",
   description:
-    "Streams the document content directly from R2 storage.",
+    "Transmite o conteúdo do documento diretamente do armazenamento R2.",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "dados-gov",
       }),
       docId: z.string().openapi({
         param: { name: "docId", in: "path" },
-        description: "Document identifier",
+        description: "Identificador do documento",
         example: "abc-123",
       }),
     }),
   },
   responses: {
     200: {
-      description: "File content (stream)",
+      description: "Conteúdo do ficheiro (stream)",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Document not found",
+      description: "Documento não encontrado",
     },
   },
 });

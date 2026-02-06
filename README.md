@@ -109,9 +109,9 @@ curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 | GET    | `/reference`                                 | Interface Scalar de referencia da API|
 | GET    | `/health`                                    | Health check                         |
 
-Todos os endpoints suportam filtragem por query parameters. Consulta a interface Scalar em `/reference` para documentacao completa dos parametros.
+Todos os endpoints suportam filtragem por query parameters. Consulta a interface Scalar em `/reference` para documentação completa dos parâmetros.
 
-**API contract:** All endpoints, request/response body fields, query and path parameter names, and descriptions are in **English**. This is a breaking change for clients that relied on the previous Portuguese field names (e.g. `dados`, `erro`, `limite`, `desvio`). Use the Scalar reference at `/reference` for the current schema.
+**Contrato da API:** Os caminhos dos endpoints, os nomes dos campos nos corpos de pedido/resposta e dos parâmetros de query/path estão em **inglês**. A **documentação** (este README) e a **interface Scalar** (títulos, descrições e textos em `/reference`) estão em **português europeu**.
 
 ## Estrutura do Projeto
 

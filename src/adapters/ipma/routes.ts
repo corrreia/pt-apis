@@ -32,21 +32,21 @@ const PRECIPITATION_DESCRIPTION: Record<number, string> = {
 
 const TemperatureSchema = z
   .object({
-    min: z.number().openapi({ description: "Minimum temperature in °C", example: 10.5 }),
-    max: z.number().openapi({ description: "Maximum temperature in °C", example: 18.2 }),
-    unit: z.string().openapi({ description: "Unit of measure", example: "°C" }),
+    min: z.number().openapi({ description: "Temperatura mínima em °C", example: 10.5 }),
+    max: z.number().openapi({ description: "Temperatura máxima em °C", example: 18.2 }),
+    unit: z.string().openapi({ description: "Unidade de medida", example: "°C" }),
   })
   .openapi("Temperature");
 
 const WindSchema = z
   .object({
-    direction: z.string().openapi({ description: "Predominant wind direction", example: "NW" }),
+    direction: z.string().openapi({ description: "Direção predominante do vento", example: "NW" }),
     speedClass: z.number().openapi({
-      description: "Speed class (1=Weak, 2=Moderate, 3=Strong, 4=Very strong)",
+      description: "Classe de velocidade (1=Fraco, 2=Moderado, 3=Forte, 4=Muito forte)",
       example: 2,
     }),
     windSpeedDescription: z.string().openapi({
-      description: "Wind speed description in English",
+      description: "Descrição da velocidade do vento (inglês)",
       example: "Moderate",
     }),
   })
@@ -55,15 +55,15 @@ const WindSchema = z
 const PrecipitationSchema = z
   .object({
     probability: z.number().openapi({
-      description: "Precipitation probability in %",
+      description: "Probabilidade de precipitação em %",
       example: 15.0,
     }),
     intensityClass: z.number().openapi({
-      description: "Intensity class (0=None, 1=Weak, 2=Moderate, 3=Strong)",
+      description: "Classe de intensidade (0=Nenhuma, 1=Fraca, 2=Moderada, 3=Forte)",
       example: 0,
     }),
     precipitationDescription: z.string().openapi({
-      description: "Precipitation intensity description in English",
+      description: "Descrição da intensidade da precipitação (inglês)",
       example: "No precipitation",
     }),
   })
@@ -71,7 +71,7 @@ const PrecipitationSchema = z
 
 const WeatherTypeSchema = z
   .object({
-    id: z.number().openapi({ description: "IPMA weather type code", example: 2 }),
+    id: z.number().openapi({ description: "Código do tipo de tempo IPMA", example: 2 }),
   })
   .openapi("WeatherType");
 
@@ -83,7 +83,7 @@ const DailyForecastSchema = z
     precipitation: PrecipitationSchema,
     weatherType: WeatherTypeSchema,
     observedAt: z.string().openapi({
-      description: "Observation time (ISO 8601)",
+      description: "Hora de observação (ISO 8601)",
       example: "2026-02-05T10:30:00.000Z",
     }),
   })
@@ -97,7 +97,7 @@ const DailyForecastHistorySchema = z
     precipitation: PrecipitationSchema,
     weatherType: WeatherTypeSchema,
     observedAt: z.string(),
-    ingestedAt: z.string().optional().openapi({ description: "Ingestion time in system (ISO 8601)" }),
+    ingestedAt: z.string().optional().openapi({ description: "Hora de ingestão no sistema (ISO 8601)" }),
   })
   .openapi("DailyForecastHistory");
 
@@ -232,9 +232,9 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
     method: "get",
     path: "/previsao/diaria",
     tags: [tag],
-  summary: "Daily forecast for all cities",
+  summary: "Previsão diária para todas as cidades",
   description:
-    "Returns the latest daily weather forecast for all Portuguese district capitals and islands. Includes temperature, wind, precipitation and weather type with nested models.",
+    "Devolve a previsão meteorológica diária mais recente para as capitais de distrito e ilhas. Inclui temperatura, vento, precipitação e tipo de tempo com modelos aninhados.",
   responses: {
     200: {
       content: {
@@ -246,7 +246,7 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
           }),
         },
       },
-      description: "Daily forecasts for all cities",
+      description: "Previsões diárias para todas as cidades",
     },
   },
 });
@@ -255,14 +255,14 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
     method: "get",
     path: "/previsao/diaria/{locationId}",
     tags: [tag],
-  summary: "Daily forecast for one city",
+  summary: "Previsão diária para uma cidade",
   description:
-    "Returns the latest daily weather forecast for a specific location. Use the location slug (e.g. 'lisboa', 'porto', 'funchal').",
+    "Devolve a previsão meteorológica diária mais recente para uma localização. Use o slug (ex.: 'lisboa', 'porto', 'funchal').",
   request: {
     params: z.object({
       locationId: z.string().openapi({
         param: { name: "locationId", in: "path" },
-        description: "Location slug",
+        description: "Slug da localização",
         example: "lisboa",
       }),
     }),
@@ -277,11 +277,11 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
           }),
         },
       },
-      description: "Daily forecast for the location",
+      description: "Previsão diária para a localização",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Location not found",
+      description: "Localização não encontrada",
     },
   },
 });
@@ -290,14 +290,14 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
     method: "get",
     path: "/previsao/historico",
     tags: [tag],
-  summary: "Weather forecast history",
+  summary: "Histórico de previsões meteorológicas",
   description:
-    "Returns weather forecast history with pagination and time filters. Enables time-travel and querying past forecasts.",
+    "Devolve o histórico de previsões com paginação e filtros de tempo. Permite time-travel e consulta de previsões passadas.",
   request: {
     query: z.object({
       locationId: z.string().optional().openapi({
         param: { name: "locationId", in: "query" },
-        description: "Filter by location (slug)",
+        description: "Filtrar por localização (slug)",
         example: "lisboa",
       }),
       metric: z
@@ -312,27 +312,27 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
         .optional()
         .openapi({
           param: { name: "metric", in: "query" },
-          description: "Filter by specific metric",
+          description: "Filtrar por métrica específica",
           example: "temperature_max",
         }),
       from: z.string().optional().openapi({
         param: { name: "from", in: "query" },
-        description: "Start date (ISO 8601)",
+        description: "Data de início (ISO 8601)",
         example: "2026-01-01T00:00:00Z",
       }),
       to: z.string().optional().openapi({
         param: { name: "to", in: "query" },
-        description: "End date (ISO 8601)",
+        description: "Data de fim (ISO 8601)",
         example: "2026-02-05T00:00:00Z",
       }),
       limit: z.coerce.number().int().min(1).max(500).default(100).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 100,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -347,7 +347,7 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
           }),
         },
       },
-      description: "Forecast history with pagination",
+      description: "Histórico de previsões com paginação",
     },
   },
 });

@@ -27,27 +27,27 @@ const UvIndexReadingSchema = z
   .object({
     location: LocalidadeResumoSchema,
     uvIndex: z.number().openapi({
-      description: "UV index value",
+      description: "Valor do índice UV",
       example: 6.5,
     }),
     riskLevel: z.string().openapi({
-      description: "UV risk level (Low, Moderate, High, Very high, Extreme)",
+      description: "Nível de risco UV (Low, Moderate, High, Very high, Extreme)",
       example: "High",
     }),
     date: z.string().openapi({
-      description: "Reading date (YYYY-MM-DD)",
+      description: "Data da leitura (YYYY-MM-DD)",
       example: "2026-02-05",
     }),
     peakStartTime: z.string().nullable().openapi({
-      description: "Start time of UV peak period",
+      description: "Hora de início do pico de UV",
       example: "12:00",
     }),
     peakEndTime: z.string().nullable().openapi({
-      description: "End time of UV peak period",
+      description: "Hora de fim do pico de UV",
       example: "15:00",
     }),
     observedAt: z.string().openapi({
-      description: "Observation time (ISO 8601)",
+      description: "Hora de observação (ISO 8601)",
       example: "2026-02-05T10:30:00.000Z",
     }),
   })
@@ -55,7 +55,7 @@ const UvIndexReadingSchema = z
 
 const UvIndexReadingHistorySchema = UvIndexReadingSchema.extend({
   ingestedAt: z.string().optional().openapi({
-    description: "Ingestion time in system (ISO 8601)",
+    description: "Hora de ingestão no sistema (ISO 8601)",
   }),
 }).openapi("UvIndexReadingHistory");
 
@@ -137,9 +137,9 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
     method: "get",
     path: "/indice-uv",
     tags: [tag],
-  summary: "Current UV index for all cities",
+  summary: "Índice UV atual para todas as cidades",
   description:
-    "Returns the latest UV index for all locations monitored by IPMA. Includes risk level, peak hours and location data.",
+    "Devolve o índice UV mais recente para todas as localizações monitorizadas pelo IPMA. Inclui nível de risco, horas de pico e dados da localização.",
   responses: {
     200: {
       content: {
@@ -151,7 +151,7 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
           }),
         },
       },
-      description: "UV index for all cities",
+      description: "Índice UV para todas as cidades",
     },
   },
 });
@@ -160,14 +160,14 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
     method: "get",
     path: "/indice-uv/{locationId}",
     tags: [tag],
-  summary: "UV index for one city",
+  summary: "Índice UV para uma cidade",
   description:
-    "Returns the latest UV index for a specific location. Use the location slug (e.g. 'lisboa', 'porto', 'faro').",
+    "Devolve o índice UV mais recente para uma localização. Use o slug (ex.: 'lisboa', 'porto', 'faro').",
   request: {
     params: z.object({
       locationId: z.string().openapi({
         param: { name: "locationId", in: "path" },
-        description: "Location slug",
+        description: "Slug da localização",
         example: "lisboa",
       }),
     }),
@@ -182,11 +182,11 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
           }),
         },
       },
-      description: "UV index for the location",
+      description: "Índice UV para a localização",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Location not found",
+      description: "Localização não encontrada",
     },
   },
 });
@@ -195,34 +195,34 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
     method: "get",
     path: "/indice-uv/historico",
     tags: [tag],
-  summary: "UV index history",
+  summary: "Histórico do índice UV",
   description:
-    "Returns UV index reading history with pagination and time filters. Enables querying past data for analysis.",
+    "Devolve o histórico de leituras do índice UV com paginação e filtros de tempo. Permite consultar dados passados para análise.",
   request: {
     query: z.object({
       locationId: z.string().optional().openapi({
         param: { name: "locationId", in: "query" },
-        description: "Filter by location (slug)",
+        description: "Filtrar por localização (slug)",
         example: "lisboa",
       }),
       from: z.string().optional().openapi({
         param: { name: "from", in: "query" },
-        description: "Start date (ISO 8601)",
+        description: "Data de início (ISO 8601)",
         example: "2026-01-01T00:00:00Z",
       }),
       to: z.string().optional().openapi({
         param: { name: "to", in: "query" },
-        description: "End date (ISO 8601)",
+        description: "Data de fim (ISO 8601)",
         example: "2026-02-05T00:00:00Z",
       }),
       limit: z.coerce.number().int().min(1).max(500).default(100).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 100,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -237,7 +237,7 @@ export function createQualidadeArRoutes(adapter: AdapterDefinition): OpenAPIHono
           }),
         },
       },
-      description: "UV index history with pagination",
+      description: "Histórico do índice UV com paginação",
     },
   },
 });

@@ -11,17 +11,17 @@ import { ErroSchema } from "../schemas";
 
 const SourceSchema = z
   .object({
-    id: z.string().openapi({ description: "Unique adapter identifier", example: "ipma-weather" }),
-    name: z.string().openapi({ description: "Data source name" }),
-    description: z.string().nullable().openapi({ description: "Data source description" }),
-    sourceUrl: z.string().nullable().openapi({ description: "Original data source URL" }),
-    dataTypes: z.array(z.string()).openapi({ description: "Data types produced (timeseries, document, snapshot)" }),
-    state: z.string().openapi({ description: "Current source state", example: "active" }),
-    lastCollectedAt: z.string().nullable().openapi({ description: "Last data collection time (ISO 8601)" }),
-    hasCustomRoutes: z.boolean().openapi({ description: "Whether the adapter defines custom routes" }),
-    hasCustomSchema: z.boolean().openapi({ description: "Whether the adapter defines custom tables" }),
+    id: z.string().openapi({ description: "Identificador único do adapter", example: "ipma-weather" }),
+    name: z.string().openapi({ description: "Nome da fonte de dados" }),
+    description: z.string().nullable().openapi({ description: "Descrição da fonte" }),
+    sourceUrl: z.string().nullable().openapi({ description: "URL original da fonte" }),
+    dataTypes: z.array(z.string()).openapi({ description: "Tipos de dados produzidos (timeseries, document, snapshot)" }),
+    state: z.string().openapi({ description: "Estado atual da fonte", example: "active" }),
+    lastCollectedAt: z.string().nullable().openapi({ description: "Última recolha de dados (ISO 8601)" }),
+    hasCustomRoutes: z.boolean().openapi({ description: "Se o adapter define rotas personalizadas" }),
+    hasCustomSchema: z.boolean().openapi({ description: "Se o adapter define tabelas próprias" }),
     hasLocations: z.boolean().openapi({
-      description: "Whether this adapter contributes to the shared locations table",
+      description: "Se este adapter contribui para a tabela de localizações partilhadas",
     }),
   })
   .openapi("Source");
@@ -29,20 +29,20 @@ const SourceSchema = z
 const SourceDetailSchema = SourceSchema.extend({
   schedules: z.array(
     z.object({
-      frequency: z.string().openapi({ description: "Schedule frequency (e.g. hourly, daily)" }),
-      description: z.string().openapi({ description: "Scheduled job description" }),
+      frequency: z.string().openapi({ description: "Frequência do agendamento (ex.: hourly, daily)" }),
+      description: z.string().openapi({ description: "Descrição da tarefa agendada" }),
     }),
-  ).openapi({ description: "Configured schedules (cron jobs)" }),
+  ).openapi({ description: "Agendamentos configurados (cron)" }),
   recentIngestions: z.array(
     z.object({
       id: z.number(),
-      state: z.string().openapi({ description: "Ingestion state (running, success, error)" }),
-      recordCount: z.number().nullable().openapi({ description: "Number of records ingested" }),
-      error: z.string().nullable().openapi({ description: "Error message if applicable" }),
-      startedAt: z.string().openapi({ description: "Start time (ISO 8601)" }),
-      finishedAt: z.string().nullable().openapi({ description: "Finish time (ISO 8601)" }),
+      state: z.string().openapi({ description: "Estado da ingestão (running, success, error)" }),
+      recordCount: z.number().nullable().openapi({ description: "Número de registos ingeridos" }),
+      error: z.string().nullable().openapi({ description: "Mensagem de erro se aplicável" }),
+      startedAt: z.string().openapi({ description: "Hora de início (ISO 8601)" }),
+      finishedAt: z.string().nullable().openapi({ description: "Hora de fim (ISO 8601)" }),
     }),
-  ).openapi({ description: "Recent data ingestions" }),
+  ).openapi({ description: "Ingestões recentes" }),
 }).openapi("SourceDetail");
 
 // ---------------------------------------------------------------------------
@@ -53,13 +53,13 @@ const listSources = createRoute({
   method: "get",
   path: "/v1/sources",
   tags: ["Sources"],
-  summary: "List all data sources",
+  summary: "Listar todas as fontes de dados",
   description:
-    "Returns all registered adapters (data sources), including their current state, data types and whether they have custom routes.",
+    "Devolve todos os adapters (fontes) registados, incluindo estado, tipos de dados e se têm rotas personalizadas.",
   responses: {
     200: {
       content: { "application/json": { schema: z.object({ data: z.array(SourceSchema) }) } },
-      description: "List of all data sources",
+      description: "Lista de todas as fontes",
     },
   },
 });
@@ -68,14 +68,14 @@ const getSource = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}",
   tags: ["Sources"],
-  summary: "Get data source details",
+  summary: "Detalhes de uma fonte",
   description:
-    "Returns detailed information about a specific data source, including schedules and recent ingestion history.",
+    "Devolve informação detalhada de uma fonte: agendamentos e histórico de ingestões recentes.",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "ipma-weather",
       }),
     }),
@@ -83,11 +83,11 @@ const getSource = createRoute({
   responses: {
     200: {
       content: { "application/json": { schema: z.object({ data: SourceDetailSchema }) } },
-      description: "Data source details",
+      description: "Detalhes da fonte",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Source not found",
+      description: "Fonte não encontrada",
     },
   },
 });

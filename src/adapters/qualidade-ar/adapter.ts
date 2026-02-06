@@ -70,14 +70,14 @@ const adapter: AdapterDefinition = {
   name: "Air Quality — UV Index",
   openApiTag: "Air Quality",
   description:
-    "UV index forecasts for Portuguese cities from IPMA. Includes risk level, peak hours and data per location. For full air quality data, integrate with QualAr/APA or Porto Digital FIWARE.",
+    "Previsões de índice UV para cidades portuguesas (IPMA). Inclui nível de risco, horas de pico e dados por localização. Para dados completos de qualidade do ar, integrar com QualAr/APA ou Porto Digital FIWARE.",
   sourceUrl: "https://api.ipma.pt/open-data/",
   dataTypes: ["timeseries", "snapshot"],
   schedules: [
     {
       frequency: "hourly",
       handler: fetchUvIndex,
-      description: "Fetch UV index forecast for all cities",
+      description: "Recolher previsão de índice UV para todas as cidades",
     },
   ],
 };

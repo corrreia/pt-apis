@@ -137,14 +137,14 @@ const adapter: AdapterDefinition = {
   name: "IPMA — Weather Forecast",
   openApiTag: "IPMA Weather",
   description:
-    "Daily weather forecasts for all Portuguese district capitals and islands, from the Portuguese Sea and Atmosphere Institute (IPMA). Includes temperature, precipitation, wind and weather type.",
+    "Previsões meteorológicas diárias para as capitais de distrito e ilhas, do Instituto do Mar e da Atmosfera (IPMA). Inclui temperatura, precipitação, vento e tipo de tempo.",
   sourceUrl: "https://api.ipma.pt/open-data/",
   dataTypes: ["timeseries", "snapshot"],
   schedules: [
     {
       frequency: "every_15_minutes",
       handler: fetchWeatherForecast,
-      description: "Fetch daily weather forecast for all cities",
+      description: "Recolher previsão meteorológica diária para todas as cidades",
     },
   ],
 };

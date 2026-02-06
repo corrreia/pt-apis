@@ -11,15 +11,15 @@ import { ErroSchema } from "../schemas";
 
 const LocationSchema = z
   .object({
-    id: z.string().openapi({ description: "Unique identifier (slug)", example: "lisboa" }),
-    name: z.string().openapi({ description: "Location name", example: "Lisboa" }),
+    id: z.string().openapi({ description: "Identificador único (slug)", example: "lisboa" }),
+    name: z.string().openapi({ description: "Nome da localização", example: "Lisboa" }),
     latitude: z.number().nullable().openapi({ description: "Latitude" }),
     longitude: z.number().nullable().openapi({ description: "Longitude" }),
-    type: z.string().openapi({ description: "Location type (city, district, station, sensor)", example: "city" }),
-    region: z.string().nullable().openapi({ description: "Region", example: "Lisboa" }),
-    district: z.string().nullable().openapi({ description: "District", example: "Lisboa" }),
-    municipality: z.string().nullable().openapi({ description: "Municipality" }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Additional JSON metadata" }),
+    type: z.string().openapi({ description: "Tipo (city, district, station, sensor)", example: "city" }),
+    region: z.string().nullable().openapi({ description: "Região", example: "Lisboa" }),
+    district: z.string().nullable().openapi({ description: "Distrito", example: "Lisboa" }),
+    municipality: z.string().nullable().openapi({ description: "Município" }),
+    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
   })
   .openapi("Location");
 
@@ -27,14 +27,14 @@ const LocationDataSchema = z
   .object({
     latestValues: z.array(
       z.object({
-        adapterId: z.string().openapi({ description: "Adapter identifier" }),
-        metric: z.string().openapi({ description: "Metric name" }),
-        entityId: z.string().openapi({ description: "Entity identifier" }),
-        value: z.number().openapi({ description: "Numeric value" }),
+        adapterId: z.string().openapi({ description: "Identificador do adapter" }),
+        metric: z.string().openapi({ description: "Nome da métrica" }),
+        entityId: z.string().openapi({ description: "Identificador da entidade" }),
+        value: z.number().openapi({ description: "Valor numérico" }),
         metadata: z.record(z.string(), z.unknown()).nullable(),
         observedAt: z.string(),
       }),
-    ).openapi({ description: "Latest values from all sources for this location" }),
+    ).openapi({ description: "Valores mais recentes de todas as fontes para esta localização" }),
     documents: z.array(
       z.object({
         id: z.string(),
@@ -43,7 +43,7 @@ const LocationDataSchema = z
         contentType: z.string(),
         capturedAt: z.string(),
       }),
-    ).openapi({ description: "Documents associated with this location" }),
+    ).openapi({ description: "Documentos associados a esta localização" }),
     snapshots: z.array(
       z.object({
         id: z.number(),
@@ -51,7 +51,7 @@ const LocationDataSchema = z
         snapshotType: z.string(),
         capturedAt: z.string(),
       }),
-    ).openapi({ description: "Snapshots associated with this location" }),
+    ).openapi({ description: "Snapshots associados a esta localização" }),
   })
   .openapi("LocationData");
 
@@ -63,39 +63,39 @@ const listLocations = createRoute({
   method: "get",
   path: "/v1/locations",
   tags: ["Locations"],
-  summary: "List all locations",
+  summary: "Listar todas as localizações",
   description:
-    "Returns all shared locations registered by adapters. Supports filtering by type, region, district or searching by name.",
+    "Devolve todas as localizações partilhadas registadas pelos adapters. Suporta filtro por tipo, região, distrito ou pesquisa por nome.",
   request: {
     query: z.object({
       type: z.string().optional().openapi({
         param: { name: "type", in: "query" },
-        description: "Filter by location type (city, district, station, sensor)",
+        description: "Filtrar por tipo (city, district, station, sensor)",
         example: "city",
       }),
       region: z.string().optional().openapi({
         param: { name: "region", in: "query" },
-        description: "Filter by region",
+        description: "Filtrar por região",
         example: "Norte",
       }),
       district: z.string().optional().openapi({
         param: { name: "district", in: "query" },
-        description: "Filter by district",
+        description: "Filtrar por distrito",
         example: "Porto",
       }),
       q: z.string().optional().openapi({
         param: { name: "q", in: "query" },
-        description: "Search by location name",
+        description: "Pesquisar por nome da localização",
         example: "lisb",
       }),
       limit: z.coerce.number().int().min(1).max(500).default(100).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 100,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -110,7 +110,7 @@ const listLocations = createRoute({
           }),
         },
       },
-      description: "List of locations",
+      description: "Lista de localizações",
     },
   },
 });
@@ -119,13 +119,13 @@ const getLocation = createRoute({
   method: "get",
   path: "/v1/locations/{locationId}",
   tags: ["Locations"],
-  summary: "Get location details",
-  description: "Returns details for a specific location.",
+  summary: "Detalhes de uma localização",
+  description: "Devolve os detalhes de uma localização específica.",
   request: {
     params: z.object({
       locationId: z.string().openapi({
         param: { name: "locationId", in: "path" },
-        description: "Location identifier (slug)",
+        description: "Identificador da localização (slug)",
         example: "lisboa",
       }),
     }),
@@ -133,11 +133,11 @@ const getLocation = createRoute({
   responses: {
     200: {
       content: { "application/json": { schema: z.object({ data: LocationSchema }) } },
-      description: "Location details",
+      description: "Detalhes da localização",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Location not found",
+      description: "Localização não encontrada",
     },
   },
 });
@@ -146,14 +146,14 @@ const getLocationData = createRoute({
   method: "get",
   path: "/v1/locations/{locationId}/data",
   tags: ["Locations"],
-  summary: "Get all data for a location",
+  summary: "Todos os dados de uma localização",
   description:
-    "Cross-source query: returns latest values, documents and snapshots associated with this location from all adapters.",
+    "Consulta cross-source: devolve valores mais recentes, documentos e snapshots associados a esta localização de todos os adapters.",
   request: {
     params: z.object({
       locationId: z.string().openapi({
         param: { name: "locationId", in: "path" },
-        description: "Location identifier (slug)",
+        description: "Identificador da localização (slug)",
         example: "lisboa",
       }),
     }),
@@ -168,11 +168,11 @@ const getLocationData = createRoute({
           }),
         },
       },
-      description: "All data associated with this location from all sources",
+      description: "Todos os dados desta localização de todas as fontes",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Location not found",
+      description: "Localização não encontrada",
     },
   },
 });

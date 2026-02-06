@@ -12,12 +12,12 @@ import { ErroSchema } from "../schemas";
 
 const RealtimeItemSchema = z
   .object({
-    metric: z.string().openapi({ description: "Metric name", example: "temperature_max" }),
-    entityId: z.string().openapi({ description: "Entity identifier", example: "lisboa" }),
-    locationId: z.string().nullable().openapi({ description: "Associated location identifier" }),
-    value: z.number().openapi({ description: "Numeric metric value", example: 18.2 }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Additional JSON metadata" }),
-    observedAt: z.string().openapi({ description: "Observation time (ISO 8601)" }),
+    metric: z.string().openapi({ description: "Nome da métrica", example: "temperature_max" }),
+    entityId: z.string().openapi({ description: "Identificador da entidade", example: "lisboa" }),
+    locationId: z.string().nullable().openapi({ description: "Identificador da localização associada" }),
+    value: z.number().openapi({ description: "Valor numérico da métrica", example: 18.2 }),
+    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
+    observedAt: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
   })
   .openapi("RealtimeItem");
 
@@ -29,14 +29,14 @@ const getRealtime = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}/realtime",
   tags: ["Realtime"],
-  summary: "Get latest values for a source",
+  summary: "Valores mais recentes de uma fonte",
   description:
-    "Returns the most recent value for each metric/entity pair ingested by this data source. Ideal for dashboards and real-time monitoring.",
+    "Devolve o valor mais recente de cada par métrica/entidade ingerido por esta fonte. Ideal para dashboards e monitorização em tempo real.",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "ipma-weather",
       }),
     }),
@@ -46,7 +46,7 @@ const getRealtime = createRoute({
         .optional()
         .openapi({
           param: { name: "metric", in: "query" },
-          description: "Filter by metric name",
+          description: "Filtrar por nome da métrica",
           example: "temperature_max",
         }),
       entityId: z
@@ -54,7 +54,7 @@ const getRealtime = createRoute({
         .optional()
         .openapi({
           param: { name: "entityId", in: "query" },
-          description: "Filter by entity identifier",
+          description: "Filtrar por identificador da entidade",
           example: "lisboa",
         }),
     }),
@@ -65,15 +65,15 @@ const getRealtime = createRoute({
         "application/json": {
           schema: z.object({
             data: z.array(RealtimeItemSchema),
-            updatedAt: z.string().openapi({ description: "Response time (ISO 8601)" }),
+            updatedAt: z.string().openapi({ description: "Hora da resposta (ISO 8601)" }),
           }),
         },
       },
-      description: "Latest values",
+      description: "Valores mais recentes",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Source not found",
+      description: "Fonte não encontrada",
     },
   },
 });

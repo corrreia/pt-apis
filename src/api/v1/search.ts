@@ -10,13 +10,13 @@ import { PaginacaoSchema } from "../schemas";
 
 const SearchResultSchema = z
   .object({
-    adapterId: z.string().openapi({ description: "Source adapter identifier" }),
-    metric: z.string().openapi({ description: "Metric name", example: "temperature_max" }),
-    entityId: z.string().openapi({ description: "Entity identifier", example: "lisboa" }),
-    locationId: z.string().nullable().openapi({ description: "Associated location identifier" }),
-    value: z.number().openapi({ description: "Numeric metric value" }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Additional JSON metadata" }),
-    observedAt: z.string().openapi({ description: "Observation time (ISO 8601)" }),
+    adapterId: z.string().openapi({ description: "Identificador do adapter da fonte" }),
+    metric: z.string().openapi({ description: "Nome da métrica", example: "temperature_max" }),
+    entityId: z.string().openapi({ description: "Identificador da entidade", example: "lisboa" }),
+    locationId: z.string().nullable().openapi({ description: "Identificador da localização associada" }),
+    value: z.number().openapi({ description: "Valor numérico da métrica" }),
+    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
+    observedAt: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
   })
   .openapi("SearchResult");
 
@@ -28,9 +28,9 @@ const search = createRoute({
   method: "get",
   path: "/v1/search",
   tags: ["Search"],
-  summary: "Search across all data sources",
+  summary: "Pesquisar em todas as fontes",
   description:
-    "Cross-source search by metric, entity, location or time range. By default searches latest values; use `mode=historical` to search time series data.",
+    "Pesquisa entre fontes por métrica, entidade, localização ou intervalo de tempo. Por defeito devolve valores mais recentes; use `mode=historical` para séries temporais.",
   request: {
     query: z.object({
       q: z
@@ -38,27 +38,27 @@ const search = createRoute({
         .optional()
         .openapi({
           param: { name: "q", in: "query" },
-          description: "Free-text search on metric name",
+          description: "Pesquisa livre no nome da métrica",
           example: "temperature",
         }),
       metric: z.string().optional().openapi({
         param: { name: "metric", in: "query" },
-        description: "Filter by exact metric name",
+        description: "Filtrar por nome exato da métrica",
         example: "temperature_max",
       }),
       entityId: z.string().optional().openapi({
         param: { name: "entityId", in: "query" },
-        description: "Filter by entity identifier",
+        description: "Filtrar por identificador da entidade",
         example: "lisboa",
       }),
       adapterId: z.string().optional().openapi({
         param: { name: "adapterId", in: "query" },
-        description: "Filter by adapter identifier",
+        description: "Filtrar por identificador do adapter",
         example: "ipma-weather",
       }),
       locationId: z.string().optional().openapi({
         param: { name: "locationId", in: "query" },
-        description: "Filter by location identifier",
+        description: "Filtrar por identificador da localização",
         example: "lisboa",
       }),
       mode: z
@@ -66,27 +66,27 @@ const search = createRoute({
         .default("recent")
         .openapi({
           param: { name: "mode", in: "query" },
-          description: "Search mode: 'recent' (current values) or 'historical' (time series)",
+          description: "Modo: 'recent' (valores atuais) ou 'historical' (séries temporais)",
           example: "recent",
         }),
       from: z.string().optional().openapi({
         param: { name: "from", in: "query" },
-        description: "Start of time range (ISO 8601, historical mode only)",
+        description: "Início do intervalo (ISO 8601, só modo historical)",
         example: "2026-01-01T00:00:00Z",
       }),
       to: z.string().optional().openapi({
         param: { name: "to", in: "query" },
-        description: "End of time range (ISO 8601, historical mode only)",
+        description: "Fim do intervalo (ISO 8601, só modo historical)",
         example: "2026-02-05T00:00:00Z",
       }),
       limit: z.coerce.number().int().min(1).max(500).default(50).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 50,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -101,7 +101,7 @@ const search = createRoute({
           }),
         },
       },
-      description: "Search results",
+      description: "Resultados da pesquisa",
     },
   },
 });

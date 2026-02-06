@@ -12,10 +12,10 @@ import { ErroSchema } from "../schemas";
 
 const SnapshotSchema = z
   .object({
-    id: z.number().openapi({ description: "Unique snapshot identifier" }),
-    snapshotType: z.string().openapi({ description: "Snapshot type (e.g. daily-forecast, uv-index)", example: "daily-forecast" }),
-    data: z.unknown().openapi({ description: "Captured JSON data" }),
-    capturedAt: z.string().openapi({ description: "Capture time (ISO 8601)" }),
+    id: z.number().openapi({ description: "Identificador único do snapshot" }),
+    snapshotType: z.string().openapi({ description: "Tipo de snapshot (ex.: daily-forecast, uv-index)", example: "daily-forecast" }),
+    data: z.unknown().openapi({ description: "Dados JSON capturados" }),
+    capturedAt: z.string().openapi({ description: "Hora de captura (ISO 8601)" }),
   })
   .openapi("Snapshot");
 
@@ -27,14 +27,14 @@ const listSnapshots = createRoute({
   method: "get",
   path: "/v1/sources/{sourceId}/snapshots",
   tags: ["Snapshots"],
-  summary: "List point-in-time snapshots for a source",
+  summary: "Listar snapshots de uma fonte",
   description:
-    "Returns point-in-time (snapshot) JSON captures for this source. Use for time-travel and querying the full state of data at any capture time.",
+    "Devolve capturas JSON num momento no tempo para esta fonte. Útil para time-travel e consultar o estado completo dos dados numa dada altura.",
   request: {
     params: z.object({
       sourceId: z.string().openapi({
         param: { name: "sourceId", in: "path" },
-        description: "Adapter identifier",
+        description: "Identificador do adapter",
         example: "ipma-weather",
       }),
     }),
@@ -44,17 +44,17 @@ const listSnapshots = createRoute({
         .optional()
         .openapi({
           param: { name: "type", in: "query" },
-          description: "Filter by snapshot type",
+          description: "Filtrar por tipo de snapshot",
           example: "daily-forecast",
         }),
       limit: z.coerce.number().int().min(1).max(100).default(20).openapi({
         param: { name: "limit", in: "query" },
-        description: "Maximum number of results",
+        description: "Número máximo de resultados",
         example: 20,
       }),
       offset: z.coerce.number().int().min(0).default(0).openapi({
         param: { name: "offset", in: "query" },
-        description: "Pagination offset",
+        description: "Desvio da paginação",
         example: 0,
       }),
     }),
@@ -66,11 +66,11 @@ const listSnapshots = createRoute({
           schema: z.object({ data: z.array(SnapshotSchema) }),
         },
       },
-      description: "List of snapshots",
+      description: "Lista de snapshots",
     },
     404: {
       content: { "application/json": { schema: ErroSchema } },
-      description: "Source not found",
+      description: "Fonte não encontrada",
     },
   },
 });
