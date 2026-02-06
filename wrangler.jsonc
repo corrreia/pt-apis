@@ -6,7 +6,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "pt-apis",
 	"main": "src/index.ts",
-	"compatibility_date": "2026-02-05",
+	"compatibility_date": "2025-12-17",
 	"assets": {
 		"binding": "ASSETS",
 		"directory": "./public"
@@ -16,28 +16,39 @@
 	},
 	"compatibility_flags": [
 		"nodejs_compat"
-	]
-	/**
-	 * Smart Placement
-	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-	 */
-	// "placement": {  "mode": "smart" }
-	/**
-	 * Bindings
-	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-	 * databases, object storage, AI inference, real-time communication and more.
-	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-	 */
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-	// "vars": {  "MY_VARIABLE": "production_value" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+	],
+
+	// ── Storage ──────────────────────────────────────────────────────────
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "pt-apis-d1",
+			"database_id": "df2a38c0-bdbf-4f15-a1be-a092d10cdd74",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "DOCUMENTS",
+			"bucket_name": "pt-apis-r2",
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "CACHE",
+			"id": "d383fde0962d45809f99201bdfd48dfa"
+		}
+	],
+
+	// ── Cron triggers (3 max on CF Workers) ─────────────────────────────
+	// * * * * *   → every minute  (dispatches every_minute / every_5m / every_15m)
+	// 0 * * * *   → top of hour   (dispatches hourly / every_6_hours)
+	// 0 0 * * *   → midnight UTC  (dispatches daily / weekly)
+	"triggers": {
+		"crons": [
+			"* * * * *",
+			"0 * * * *",
+			"0 0 * * *"
+		]
+	}
 }
