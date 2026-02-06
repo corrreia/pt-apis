@@ -6,7 +6,7 @@ import type { Db } from "../db/client";
 // ---------------------------------------------------------------------------
 
 /** The kinds of data an adapter can produce. */
-export type DataType = "timeseries" | "document" | "snapshot";
+export type DataType = "api_data" | "document";
 
 /**
  * Predefined cron frequencies.
@@ -28,15 +28,16 @@ export type CronFrequency =
 // Storage Input Types
 // ---------------------------------------------------------------------------
 
-/** A single timeseries data point to ingest. */
-export interface TimeseriesPoint {
-  metric: string;
-  entityId: string;
-  value: number;
-  /** Optional link to a shared location. */
+/** Options when storing api_data. */
+export interface ApiDataInput {
+  /** FK to locations.id — enables location-based queries. */
   locationId?: string;
-  metadata?: Record<string, unknown>;
-  observedAt: Date;
+  /** JSON array of tags, e.g. ["weather", "forecast"]. */
+  tags?: string[];
+  /** Observed/captured time. Defaults to now. */
+  timestamp?: Date;
+  /** When we ingested it. Defaults to now. */
+  scrapedAt?: Date;
 }
 
 /** A document to upload to R2. */
@@ -80,14 +81,16 @@ export interface AdapterContext {
   cache: KVNamespace;
   log: (...args: unknown[]) => void;
 
-  /** Batch-insert timeseries points + upsert latest values. */
-  ingestTimeseries(adapterId: string, points: TimeseriesPoint[]): Promise<number>;
+  /** Store a row in api_data. Adapters provide payload_type and payload; location_id and timestamp enable consistent queries. */
+  storeApiData(
+    adapterId: string,
+    payloadType: string,
+    payload: unknown,
+    options?: ApiDataInput,
+  ): Promise<string>;
 
   /** Upload a document to R2 and record metadata in D1. */
   uploadDocument(adapterId: string, doc: DocumentInput): Promise<string>;
-
-  /** Store a JSON snapshot in D1. */
-  storeSnapshot(adapterId: string, type: string, data: unknown, locationId?: string): Promise<void>;
 
   /** Upsert a location into the shared locations table. */
   registerLocation(loc: LocationInput): Promise<void>;

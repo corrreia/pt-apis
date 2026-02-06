@@ -11,11 +11,8 @@ import { registry } from "../core/registry";
 export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Bindings: Env }>) {
   const coreTags = [
     { name: "Sources", description: "Descobrir fontes de dados disponíveis (adapters)" },
-    { name: "Realtime", description: "Valores mais recentes por fonte" },
-    { name: "History", description: "Séries temporais históricas com time-travel" },
     { name: "Documents", description: "PDFs, CSVs e outros ficheiros armazenados em R2" },
-    { name: "Snapshots", description: "Snapshots JSON num momento no tempo" },
-    { name: "Search", description: "Pesquisa entre todas as fontes" },
+    { name: "Search", description: "Pesquisa entre todas as fontes (api_data)" },
     { name: "Locations", description: "Modelo de localizações partilhado e dados por local" },
   ];
 
@@ -29,7 +26,7 @@ export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Binding
     info: {
       title: "Portugal Public Data API",
       description:
-        "API aberta que agrega, faz cache e serve dados públicos de fontes governamentais e institucionais portuguesas. Suporta dados em tempo real, séries temporais históricas, documentos e snapshots. Cada adapter pode definir os seus próprios modelos e endpoints.",
+        "API aberta que agrega, faz cache e serve dados públicos de fontes governamentais e institucionais portuguesas. Dados em api_data (JSON payloads) com location e timestamp consistentes. Cada adapter pode definir os seus próprios modelos e endpoints.",
       version: "1.0.0",
       contact: {
         name: "PT APIs Contributors",

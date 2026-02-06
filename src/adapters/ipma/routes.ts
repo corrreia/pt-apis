@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "../../db/client";
-import { latestValues, timeseries, locations } from "../../db/schema";
+import { apiData, locations } from "../../db/schema";
 import { eq, and, desc, gte, lte, count } from "drizzle-orm";
 import { kvCache } from "../../core/cache";
 import { LocalidadeResumoSchema, ErroSchema, PaginacaoSchema } from "../../api/schemas";
@@ -9,22 +9,6 @@ import type { AdapterDefinition } from "../../core/adapter";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/** Wind speed class to English description. */
-const WIND_DESCRIPTION: Record<number, string> = {
-  1: "Weak",
-  2: "Moderate",
-  3: "Strong",
-  4: "Very strong",
-};
-
-/** Precipitation intensity class to English description. */
-const PRECIPITATION_DESCRIPTION: Record<number, string> = {
-  0: "No precipitation",
-  1: "Weak",
-  2: "Moderate",
-  3: "Strong",
-};
 
 // ---------------------------------------------------------------------------
 // Zod models (exposed as components in Scalar)
@@ -97,23 +81,13 @@ const DailyForecastHistorySchema = z
     precipitation: PrecipitationSchema,
     weatherType: WeatherTypeSchema,
     observedAt: z.string(),
-    ingestedAt: z.string().optional().openapi({ description: "Hora de ingestão no sistema (ISO 8601)" }),
+    scrapedAt: z.string().optional().openapi({ description: "Hora de ingestão no sistema (ISO 8601)" }),
   })
   .openapi("DailyForecastHistory");
 
 // ---------------------------------------------------------------------------
-// Helper: group flat rows into rich models
+// Helpers
 // ---------------------------------------------------------------------------
-
-interface FlatRow {
-  metric: string;
-  entityId: string;
-  locationId: string | null;
-  value: number;
-  metadata: string | null;
-  observedAt: Date;
-  ingestedAt?: Date;
-}
 
 interface LocationRow {
   id: string;
@@ -122,88 +96,6 @@ interface LocationRow {
   region: string | null;
   latitude: number | null;
   longitude: number | null;
-}
-
-function buildForecast(
-  rows: FlatRow[],
-  locMap: Map<string, LocationRow>,
-): Record<string, {
-  location: z.infer<typeof LocalidadeResumoSchema>;
-  temperature: z.infer<typeof TemperatureSchema>;
-  wind: z.infer<typeof WindSchema>;
-  precipitation: z.infer<typeof PrecipitationSchema>;
-  weatherType: z.infer<typeof WeatherTypeSchema>;
-  observedAt: string;
-  ingestedAt?: string;
-}> {
-  const grouped: Record<string, FlatRow[]> = {};
-  for (const r of rows) {
-    const key = r.entityId;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(r);
-  }
-
-  const result: Record<string, any> = {};
-  for (const [entityId, metrics] of Object.entries(grouped)) {
-    const locId = metrics[0].locationId;
-    const loc = locId ? locMap.get(locId) : undefined;
-    const meta = metrics[0].metadata ? JSON.parse(metrics[0].metadata) : {};
-
-    const valMap: Record<string, number> = {};
-    let windDir = "N/A";
-    let observedAt = metrics[0].observedAt;
-    let ingestedAt = (metrics[0] as any).ingestedAt;
-
-    for (const m of metrics) {
-      valMap[m.metric] = m.value;
-      if (m.metric === "wind_speed_class") {
-        const parsed = m.metadata ? JSON.parse(m.metadata) : {};
-        windDir = parsed.windDirection ?? "N/A";
-      }
-      if (m.observedAt > observedAt) observedAt = m.observedAt;
-    }
-
-    const windClass = valMap["wind_speed_class"] ?? 0;
-    const precIntClass = valMap["precipitation_intensity_class"] ?? 0;
-
-    result[entityId] = {
-      location: {
-        id: locId ?? entityId,
-        name: loc?.name ?? meta.city ?? entityId,
-        district: loc?.district ?? null,
-        region: loc?.region ?? null,
-        latitude: loc?.latitude ?? meta.latitude ?? null,
-        longitude: loc?.longitude ?? meta.longitude ?? null,
-      },
-      temperature: {
-        min: valMap["temperature_min"] ?? 0,
-        max: valMap["temperature_max"] ?? 0,
-        unit: "°C",
-      },
-      wind: {
-        direction: windDir,
-        speedClass: windClass,
-        windSpeedDescription: WIND_DESCRIPTION[windClass] ?? "Unknown",
-      },
-      precipitation: {
-        probability: valMap["precipitation_probability"] ?? 0,
-        intensityClass: precIntClass,
-        precipitationDescription: PRECIPITATION_DESCRIPTION[precIntClass] ?? "Unknown",
-      },
-      weatherType: {
-        id: valMap["weather_type_id"] ?? 0,
-      },
-      observedAt: observedAt instanceof Date ? observedAt.toISOString() : String(observedAt),
-      ...(ingestedAt
-        ? {
-            ingestedAt:
-              ingestedAt instanceof Date ? ingestedAt.toISOString() : String(ingestedAt),
-          }
-        : {}),
-    };
-  }
-
-  return result;
 }
 
 async function getLocationMap(db: ReturnType<typeof getDb>, locationIds: (string | null)[]) {
@@ -220,6 +112,38 @@ async function getLocationMap(db: ReturnType<typeof getDb>, locationIds: (string
   return map;
 }
 
+function rowToForecast(
+  row: { payload: string; locationId: string | null; timestamp: Date; scrapedAt: Date },
+  locMap: Map<string, LocationRow>,
+) {
+  const payload = JSON.parse(row.payload) as {
+    temperature: { min: number; max: number; unit: string };
+    wind: { direction: string; speedClass: number; windSpeedDescription: string };
+    precipitation: { probability: number; intensityClass: number; precipitationDescription: string };
+    weatherType: { id: number };
+  };
+  const locId = row.locationId;
+  const loc = locId ? locMap.get(locId) : undefined;
+  const locationName = loc?.name ?? locId ?? "unknown";
+
+  return {
+    location: {
+      id: locId ?? locationName.toLowerCase().replace(/\s+/g, "-"),
+      name: locationName,
+      district: loc?.district ?? null,
+      region: loc?.region ?? null,
+      latitude: loc?.latitude ?? null,
+      longitude: loc?.longitude ?? null,
+    },
+    temperature: payload.temperature,
+    wind: payload.wind,
+    precipitation: payload.precipitation,
+    weatherType: payload.weatherType,
+    observedAt: row.timestamp instanceof Date ? row.timestamp.toISOString() : String(row.timestamp),
+    scrapedAt: row.scrapedAt instanceof Date ? row.scrapedAt.toISOString() : undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -232,125 +156,110 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
     method: "get",
     path: "/previsao/diaria",
     tags: [tag],
-  summary: "Previsão diária para todas as cidades",
-  description:
-    "Devolve a previsão meteorológica diária mais recente para as capitais de distrito e ilhas. Inclui temperatura, vento, precipitação e tipo de tempo com modelos aninhados.",
-  responses: {
-    200: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            data: z.array(DailyForecastSchema),
-            locationCount: z.number(),
-            updatedAt: z.string(),
-          }),
+    summary: "Previsão diária para todas as cidades",
+    description:
+      "Devolve a previsão meteorológica diária mais recente para as capitais de distrito e ilhas. Inclui temperatura, vento, precipitação e tipo de tempo com modelos aninhados.",
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              data: z.array(DailyForecastSchema),
+              locationCount: z.number(),
+              updatedAt: z.string(),
+            }),
+          },
         },
+        description: "Previsões diárias para todas as cidades",
       },
-      description: "Previsões diárias para todas as cidades",
     },
-  },
-});
+  });
 
   const dailyForecastCityRoute = createRoute({
     method: "get",
     path: "/previsao/diaria/{locationId}",
     tags: [tag],
-  summary: "Previsão diária para uma cidade",
-  description:
-    "Devolve a previsão meteorológica diária mais recente para uma localização. Use o slug (ex.: 'lisboa', 'porto', 'funchal').",
-  request: {
-    params: z.object({
-      locationId: z.string().openapi({
-        param: { name: "locationId", in: "path" },
-        description: "Slug da localização",
-        example: "lisboa",
+    summary: "Previsão diária para uma cidade",
+    description:
+      "Devolve a previsão meteorológica diária mais recente para uma localização. Use o slug (ex.: 'lisboa', 'porto', 'funchal').",
+    request: {
+      params: z.object({
+        locationId: z.string().openapi({
+          param: { name: "locationId", in: "path" },
+          description: "Slug da localização",
+          example: "lisboa",
+        }),
       }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            data: DailyForecastSchema,
-            updatedAt: z.string(),
-          }),
+    },
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              data: DailyForecastSchema,
+              updatedAt: z.string(),
+            }),
+          },
         },
+        description: "Previsão diária para a localização",
       },
-      description: "Previsão diária para a localização",
+      404: {
+        content: { "application/json": { schema: ErroSchema } },
+        description: "Localização não encontrada",
+      },
     },
-    404: {
-      content: { "application/json": { schema: ErroSchema } },
-      description: "Localização não encontrada",
-    },
-  },
-});
+  });
 
   const forecastHistoryRoute = createRoute({
     method: "get",
     path: "/previsao/historico",
     tags: [tag],
-  summary: "Histórico de previsões meteorológicas",
-  description:
-    "Devolve o histórico de previsões com paginação e filtros de tempo. Permite time-travel e consulta de previsões passadas.",
-  request: {
-    query: z.object({
-      locationId: z.string().optional().openapi({
-        param: { name: "locationId", in: "query" },
-        description: "Filtrar por localização (slug)",
-        example: "lisboa",
-      }),
-      metric: z
-        .enum([
-          "temperature_min",
-          "temperature_max",
-          "precipitation_probability",
-          "wind_speed_class",
-          "precipitation_intensity_class",
-          "weather_type_id",
-        ])
-        .optional()
-        .openapi({
-          param: { name: "metric", in: "query" },
-          description: "Filtrar por métrica específica",
-          example: "temperature_max",
+    summary: "Histórico de previsões meteorológicas",
+    description:
+      "Devolve o histórico de previsões com paginação e filtros de tempo. Permite time-travel e consulta de previsões passadas.",
+    request: {
+      query: z.object({
+        locationId: z.string().optional().openapi({
+          param: { name: "locationId", in: "query" },
+          description: "Filtrar por localização (slug)",
+          example: "lisboa",
         }),
-      from: z.string().optional().openapi({
-        param: { name: "from", in: "query" },
-        description: "Data de início (ISO 8601)",
-        example: "2026-01-01T00:00:00Z",
+        from: z.string().optional().openapi({
+          param: { name: "from", in: "query" },
+          description: "Data de início (ISO 8601)",
+          example: "2026-01-01T00:00:00Z",
+        }),
+        to: z.string().optional().openapi({
+          param: { name: "to", in: "query" },
+          description: "Data de fim (ISO 8601)",
+          example: "2026-02-05T00:00:00Z",
+        }),
+        limit: z.coerce.number().int().min(1).max(500).default(100).openapi({
+          param: { name: "limit", in: "query" },
+          description: "Número máximo de resultados",
+          example: 100,
+        }),
+        offset: z.coerce.number().int().min(0).default(0).openapi({
+          param: { name: "offset", in: "query" },
+          description: "Desvio da paginação",
+          example: 0,
+        }),
       }),
-      to: z.string().optional().openapi({
-        param: { name: "to", in: "query" },
-        description: "Data de fim (ISO 8601)",
-        example: "2026-02-05T00:00:00Z",
-      }),
-      limit: z.coerce.number().int().min(1).max(500).default(100).openapi({
-        param: { name: "limit", in: "query" },
-        description: "Número máximo de resultados",
-        example: 100,
-      }),
-      offset: z.coerce.number().int().min(0).default(0).openapi({
-        param: { name: "offset", in: "query" },
-        description: "Desvio da paginação",
-        example: 0,
-      }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        "application/json": {
-          schema: z.object({
-            data: z.array(DailyForecastHistorySchema),
-            pagination: PaginacaoSchema,
-          }),
-        },
-      },
-      description: "Histórico de previsões com paginação",
     },
-  },
-});
+    responses: {
+      200: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              data: z.array(DailyForecastHistorySchema),
+              pagination: PaginacaoSchema,
+            }),
+          },
+        },
+        description: "Histórico de previsões com paginação",
+      },
+    },
+  });
 
   // ---------------------------------------------------------------------------
   // App
@@ -365,29 +274,47 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
   app.openapi(dailyForecastRoute, async (c) => {
     const db = getDb(c.env);
 
+    // Get latest batch: order by timestamp desc, take first row's timestamp, then get all rows with that timestamp
+    const latestRow = await db
+      .select({ timestamp: apiData.timestamp })
+      .from(apiData)
+      .where(and(eq(apiData.apiSource, adapterId), eq(apiData.payloadType, "daily-forecast")))
+      .orderBy(desc(apiData.timestamp))
+      .limit(1);
+
+    if (latestRow.length === 0) {
+      return c.json({
+        data: [],
+        locationCount: 0,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const maxTimestamp = latestRow[0].timestamp;
+
     const rows = await db
       .select()
-      .from(latestValues)
-      .where(eq(latestValues.adapterId, adapterId));
+      .from(apiData)
+      .where(
+        and(
+          eq(apiData.apiSource, adapterId),
+          eq(apiData.payloadType, "daily-forecast"),
+          eq(apiData.timestamp, maxTimestamp),
+        ),
+      );
 
-    const locMap = await getLocationMap(
-      db,
-      rows.map((r) => r.locationId),
+    const locMap = await getLocationMap(db, rows.map((r) => r.locationId));
+    const data = rows.map((r) =>
+      rowToForecast(
+        {
+          payload: r.payload,
+          locationId: r.locationId,
+          timestamp: r.timestamp,
+          scrapedAt: r.scrapedAt,
+        },
+        locMap,
+      ),
     );
-
-    const forecasts = buildForecast(
-      rows.map((r) => ({
-        metric: r.metric,
-        entityId: r.entityId,
-        locationId: r.locationId,
-        value: r.value,
-        metadata: r.metadata,
-        observedAt: r.observedAt,
-      })),
-      locMap,
-    );
-
-    const data = Object.values(forecasts);
 
     return c.json({
       data,
@@ -402,10 +329,16 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
 
     const rows = await db
       .select()
-      .from(latestValues)
+      .from(apiData)
       .where(
-        and(eq(latestValues.adapterId, adapterId), eq(latestValues.locationId, locationId)),
-      );
+        and(
+          eq(apiData.apiSource, adapterId),
+          eq(apiData.payloadType, "daily-forecast"),
+          eq(apiData.locationId, locationId),
+        ),
+      )
+      .orderBy(desc(apiData.timestamp))
+      .limit(1);
 
     if (rows.length === 0) {
       return c.json(
@@ -414,84 +347,62 @@ export function createIpmaRoutes(adapter: AdapterDefinition): OpenAPIHono<{ Bind
       );
     }
 
-    const locMap = await getLocationMap(
-      db,
-      rows.map((r) => r.locationId),
-    );
-
-    const forecasts = buildForecast(
-      rows.map((r) => ({
-        metric: r.metric,
-        entityId: r.entityId,
-        locationId: r.locationId,
-        value: r.value,
-        metadata: r.metadata,
-        observedAt: r.observedAt,
-      })),
+    const locMap = await getLocationMap(db, [locationId]);
+    const data = rowToForecast(
+      {
+        payload: rows[0].payload,
+        locationId: rows[0].locationId,
+        timestamp: rows[0].timestamp,
+        scrapedAt: rows[0].scrapedAt,
+      },
       locMap,
     );
 
-    const data = Object.values(forecasts)[0];
-    if (!data) {
-      return c.json(
-        { error: "Location not found", details: `No data for '${locationId}'` } as const,
-        404,
-      );
-    }
-
-    return c.json(
-      {
-        data,
-        updatedAt: new Date().toISOString(),
-      },
-      200,
-    );
+    return c.json({
+      data,
+      updatedAt: new Date().toISOString(),
+    });
   });
 
   app.openapi(forecastHistoryRoute, async (c) => {
-    const { locationId, metric, from, to, limit, offset } = c.req.valid("query");
+    const { locationId, from, to, limit, offset } = c.req.valid("query");
     const db = getDb(c.env);
 
-    const conditions = [eq(timeseries.adapterId, adapterId)];
-    if (locationId) conditions.push(eq(timeseries.locationId, locationId));
-    if (metric) conditions.push(eq(timeseries.metric, metric));
-    if (from) conditions.push(gte(timeseries.observedAt, new Date(from)));
-    if (to) conditions.push(lte(timeseries.observedAt, new Date(to)));
+    const conditions = [
+      eq(apiData.apiSource, adapterId),
+      eq(apiData.payloadType, "daily-forecast"),
+    ];
+    if (locationId) conditions.push(eq(apiData.locationId, locationId));
+    if (from) conditions.push(gte(apiData.timestamp, new Date(from)));
+    if (to) conditions.push(lte(apiData.timestamp, new Date(to)));
 
     const whereClause = and(...conditions);
 
     const [{ total }] = await db
       .select({ total: count() })
-      .from(timeseries)
+      .from(apiData)
       .where(whereClause);
 
     const rows = await db
       .select()
-      .from(timeseries)
+      .from(apiData)
       .where(whereClause)
-      .orderBy(desc(timeseries.observedAt))
+      .orderBy(desc(apiData.timestamp))
       .limit(limit)
       .offset(offset);
 
-    const locMap = await getLocationMap(
-      db,
-      rows.map((r) => r.locationId),
+    const locMap = await getLocationMap(db, rows.map((r) => r.locationId));
+    const data = rows.map((r) =>
+      rowToForecast(
+        {
+          payload: r.payload,
+          locationId: r.locationId,
+          timestamp: r.timestamp,
+          scrapedAt: r.scrapedAt,
+        },
+        locMap,
+      ),
     );
-
-    const forecasts = buildForecast(
-      rows.map((r) => ({
-        metric: r.metric,
-        entityId: r.entityId,
-        locationId: r.locationId,
-        value: r.value,
-        metadata: r.metadata,
-        observedAt: r.observedAt,
-        ingestedAt: r.ingestedAt,
-      })),
-      locMap,
-    );
-
-    const data = Object.values(forecasts);
 
     return c.json({
       data,

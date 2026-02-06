@@ -1,9 +1,106 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "63c4e2c5-4cf2-4a4e-82ad-a7ad77f836fc",
+  "id": "39eabb02-032e-4dfa-88f3-359df685bd5c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
+    "api_data": {
+      "name": "api_data",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "api_source": {
+          "name": "api_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload_type": {
+          "name": "payload_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timestamp": {
+          "name": "timestamp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scraped_at": {
+          "name": "scraped_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_api_data_timestamp": {
+          "name": "idx_api_data_timestamp",
+          "columns": [
+            "timestamp"
+          ],
+          "isUnique": false
+        },
+        "idx_api_data_source_time": {
+          "name": "idx_api_data_source_time",
+          "columns": [
+            "api_source",
+            "timestamp"
+          ],
+          "isUnique": false
+        },
+        "idx_api_data_location": {
+          "name": "idx_api_data_location",
+          "columns": [
+            "location_id"
+          ],
+          "isUnique": false
+        },
+        "idx_api_data_source_type": {
+          "name": "idx_api_data_source_type",
+          "columns": [
+            "api_source",
+            "payload_type"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "documents": {
       "name": "documents",
       "columns": {
@@ -161,82 +258,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "latest_values": {
-      "name": "latest_values",
-      "columns": {
-        "adapter_id": {
-          "name": "adapter_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metric": {
-          "name": "metric",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "value": {
-          "name": "value",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "observed_at": {
-          "name": "observed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "lv_location_idx": {
-          "name": "lv_location_idx",
-          "columns": [
-            "location_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "latest_values_adapter_id_metric_entity_id_pk": {
-          "columns": [
-            "adapter_id",
-            "metric",
-            "entity_id"
-          ],
-          "name": "latest_values_adapter_id_metric_entity_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "locations": {
       "name": "locations",
       "columns": {
@@ -332,75 +353,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "snapshots": {
-      "name": "snapshots",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "adapter_id": {
-          "name": "adapter_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "snapshot_type": {
-          "name": "snapshot_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "data": {
-          "name": "data",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "captured_at": {
-          "name": "captured_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "snap_adapter_type_idx": {
-          "name": "snap_adapter_type_idx",
-          "columns": [
-            "adapter_id",
-            "snapshot_type",
-            "captured_at"
-          ],
-          "isUnique": false
-        },
-        "snap_location_idx": {
-          "name": "snap_location_idx",
-          "columns": [
-            "location_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "sources": {
       "name": "sources",
       "columns": {
@@ -463,104 +415,6 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "timeseries": {
-      "name": "timeseries",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "adapter_id": {
-          "name": "adapter_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metric": {
-          "name": "metric",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entity_id": {
-          "name": "entity_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "value": {
-          "name": "value",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "observed_at": {
-          "name": "observed_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ingested_at": {
-          "name": "ingested_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "ts_adapter_metric_entity_idx": {
-          "name": "ts_adapter_metric_entity_idx",
-          "columns": [
-            "adapter_id",
-            "metric",
-            "entity_id",
-            "observed_at"
-          ],
-          "isUnique": false
-        },
-        "ts_observed_at_idx": {
-          "name": "ts_observed_at_idx",
-          "columns": [
-            "observed_at"
-          ],
-          "isUnique": false
-        },
-        "ts_location_idx": {
-          "name": "ts_location_idx",
-          "columns": [
-            "location_id"
-          ],
-          "isUnique": false
-        }
-      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "../../db/client";
-import { locations, latestValues, documents, snapshots } from "../../db/schema";
+import { locations, apiData, documents } from "../../db/schema";
 import { eq, and, like, desc, count } from "drizzle-orm";
 import { kvCache } from "../../core/cache";
 import { ErroSchema } from "../schemas";
@@ -25,16 +25,16 @@ const LocationSchema = z
 
 const LocationDataSchema = z
   .object({
-    latestValues: z.array(
+    apiData: z.array(
       z.object({
-        adapterId: z.string().openapi({ description: "Identificador do adapter" }),
-        metric: z.string().openapi({ description: "Nome da métrica" }),
-        entityId: z.string().openapi({ description: "Identificador da entidade" }),
-        value: z.number().openapi({ description: "Valor numérico" }),
-        metadata: z.record(z.string(), z.unknown()).nullable(),
-        observedAt: z.string(),
+        id: z.string(),
+        apiSource: z.string().openapi({ description: "Identificador do adapter" }),
+        payloadType: z.string().openapi({ description: "Tipo do payload" }),
+        payload: z.record(z.string(), z.unknown()).openapi({ description: "Payload JSON" }),
+        timestamp: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
+        scrapedAt: z.string().openapi({ description: "Hora de ingestão (ISO 8601)" }),
       }),
-    ).openapi({ description: "Valores mais recentes de todas as fontes para esta localização" }),
+    ).openapi({ description: "Dados api_data associados a esta localização" }),
     documents: z.array(
       z.object({
         id: z.string(),
@@ -44,14 +44,6 @@ const LocationDataSchema = z
         capturedAt: z.string(),
       }),
     ).openapi({ description: "Documentos associados a esta localização" }),
-    snapshots: z.array(
-      z.object({
-        id: z.number(),
-        adapterId: z.string(),
-        snapshotType: z.string(),
-        capturedAt: z.string(),
-      }),
-    ).openapi({ description: "Snapshots associados a esta localização" }),
   })
   .openapi("LocationData");
 
@@ -148,7 +140,7 @@ const getLocationData = createRoute({
   tags: ["Locations"],
   summary: "Todos os dados de uma localização",
   description:
-    "Consulta cross-source: devolve valores mais recentes, documentos e snapshots associados a esta localização de todos os adapters.",
+    "Consulta cross-source: devolve api_data e documentos associados a esta localização de todos os adapters.",
   request: {
     params: z.object({
       locationId: z.string().openapi({
@@ -271,28 +263,18 @@ app.openapi(getLocationData, async (c) => {
     return c.json({ error: "Location not found" } as const, 404);
   }
 
-  const [lvRows, docRows, snapRows] = await Promise.all([
+  const [apiDataRows, docRows] = await Promise.all([
     db
       .select()
-      .from(latestValues)
-      .where(eq(latestValues.locationId, locationId))
+      .from(apiData)
+      .where(eq(apiData.locationId, locationId))
+      .orderBy(desc(apiData.timestamp))
       .limit(500),
     db
       .select()
       .from(documents)
       .where(eq(documents.locationId, locationId))
       .orderBy(desc(documents.capturedAt))
-      .limit(100),
-    db
-      .select({
-        id: snapshots.id,
-        adapterId: snapshots.adapterId,
-        snapshotType: snapshots.snapshotType,
-        capturedAt: snapshots.capturedAt,
-      })
-      .from(snapshots)
-      .where(eq(snapshots.locationId, locationId))
-      .orderBy(desc(snapshots.capturedAt))
       .limit(100),
   ]);
 
@@ -310,25 +292,19 @@ app.openapi(getLocationData, async (c) => {
         metadata: loc.metadata ? JSON.parse(loc.metadata) : null,
       },
       data: {
-        latestValues: lvRows.map((r) => ({
-          adapterId: r.adapterId,
-          metric: r.metric,
-          entityId: r.entityId,
-          value: r.value,
-          metadata: r.metadata ? JSON.parse(r.metadata) : null,
-          observedAt: r.observedAt.toISOString(),
+        apiData: apiDataRows.map((r) => ({
+          id: r.id,
+          apiSource: r.apiSource,
+          payloadType: r.payloadType,
+          payload: JSON.parse(r.payload) as Record<string, unknown>,
+          timestamp: r.timestamp instanceof Date ? r.timestamp.toISOString() : String(r.timestamp),
+          scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
         })),
         documents: docRows.map((r) => ({
           id: r.id,
           adapterId: r.adapterId,
           name: r.name,
           contentType: r.contentType,
-          capturedAt: r.capturedAt.toISOString(),
-        })),
-        snapshots: snapRows.map((r) => ({
-          id: r.id,
-          adapterId: r.adapterId,
-          snapshotType: r.snapshotType,
           capturedAt: r.capturedAt.toISOString(),
         })),
       },

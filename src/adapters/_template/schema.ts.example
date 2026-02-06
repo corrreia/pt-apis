@@ -1,7 +1,7 @@
 /**
  * Example: Custom adapter schema.
  *
- * If your data doesn't fit the generic timeseries/documents/snapshots model,
+ * If your data doesn't fit the generic api_data/documents model,
  * define your own Drizzle tables here. The Drizzle config glob
  * (src/adapters/*/schema.ts) picks these up automatically for migration
  * generation.

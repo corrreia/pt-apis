@@ -7,10 +7,7 @@ import "./adapters/index";
 
 // API route modules
 import sourcesApp from "./api/v1/sources";
-import realtimeApp from "./api/v1/realtime";
-import historyApp from "./api/v1/history";
 import documentsApp from "./api/v1/documents";
-import snapshotsApp from "./api/v1/snapshots";
 import searchApp from "./api/v1/search";
 import locationsApp from "./api/v1/locations";
 import { mountDocs } from "./api/openapi";
@@ -46,10 +43,7 @@ app.use("*", async (c, next) => {
 
 // Mount core API routes
 app.route("/", sourcesApp);
-app.route("/", realtimeApp);
-app.route("/", historyApp);
 app.route("/", documentsApp);
-app.route("/", snapshotsApp);
 app.route("/", searchApp);
 app.route("/", locationsApp);
 

@@ -15,7 +15,7 @@ const SourceSchema = z
     name: z.string().openapi({ description: "Nome da fonte de dados" }),
     description: z.string().nullable().openapi({ description: "Descrição da fonte" }),
     sourceUrl: z.string().nullable().openapi({ description: "URL original da fonte" }),
-    dataTypes: z.array(z.string()).openapi({ description: "Tipos de dados produzidos (timeseries, document, snapshot)" }),
+    dataTypes: z.array(z.string()).openapi({ description: "Tipos de dados produzidos (api_data, document)" }),
     state: z.string().openapi({ description: "Estado atual da fonte", example: "active" }),
     lastCollectedAt: z.string().nullable().openapi({ description: "Última recolha de dados (ISO 8601)" }),
     hasCustomRoutes: z.boolean().openapi({ description: "Se o adapter define rotas personalizadas" }),

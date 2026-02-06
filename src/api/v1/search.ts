@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "../../db/client";
-import { latestValues, timeseries } from "../../db/schema";
-import { eq, and, like, desc, gte, lte, count } from "drizzle-orm";
+import { apiData } from "../../db/schema";
+import { eq, and, desc, gte, lte, count } from "drizzle-orm";
 import { PaginacaoSchema } from "../schemas";
 
 // ---------------------------------------------------------------------------
@@ -10,13 +10,14 @@ import { PaginacaoSchema } from "../schemas";
 
 const SearchResultSchema = z
   .object({
-    adapterId: z.string().openapi({ description: "Identificador do adapter da fonte" }),
-    metric: z.string().openapi({ description: "Nome da métrica", example: "temperature_max" }),
-    entityId: z.string().openapi({ description: "Identificador da entidade", example: "lisboa" }),
+    id: z.string().openapi({ description: "Identificador único do registo" }),
+    apiSource: z.string().openapi({ description: "Identificador do adapter", example: "ipma-weather" }),
+    payloadType: z.string().openapi({ description: "Tipo do payload", example: "daily-forecast" }),
     locationId: z.string().nullable().openapi({ description: "Identificador da localização associada" }),
-    value: z.number().openapi({ description: "Valor numérico da métrica" }),
-    metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
-    observedAt: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
+    timestamp: z.string().openapi({ description: "Hora de observação/captura (ISO 8601)" }),
+    payload: z.record(z.string(), z.unknown()).openapi({ description: "Payload JSON" }),
+    tags: z.array(z.string()).nullable().openapi({ description: "Etiquetas" }),
+    scrapedAt: z.string().openapi({ description: "Hora de ingestão (ISO 8601)" }),
   })
   .openapi("SearchResult");
 
@@ -30,53 +31,32 @@ const search = createRoute({
   tags: ["Search"],
   summary: "Pesquisar em todas as fontes",
   description:
-    "Pesquisa entre fontes por métrica, entidade, localização ou intervalo de tempo. Por defeito devolve valores mais recentes; use `mode=historical` para séries temporais.",
+    "Pesquisa em api_data por adapter, localização ou intervalo de tempo. Devolve registos com payload JSON.",
   request: {
     query: z.object({
-      q: z
-        .string()
-        .optional()
-        .openapi({
-          param: { name: "q", in: "query" },
-          description: "Pesquisa livre no nome da métrica",
-          example: "temperature",
-        }),
-      metric: z.string().optional().openapi({
-        param: { name: "metric", in: "query" },
-        description: "Filtrar por nome exato da métrica",
-        example: "temperature_max",
-      }),
-      entityId: z.string().optional().openapi({
-        param: { name: "entityId", in: "query" },
-        description: "Filtrar por identificador da entidade",
-        example: "lisboa",
-      }),
       adapterId: z.string().optional().openapi({
         param: { name: "adapterId", in: "query" },
         description: "Filtrar por identificador do adapter",
         example: "ipma-weather",
+      }),
+      payloadType: z.string().optional().openapi({
+        param: { name: "payloadType", in: "query" },
+        description: "Filtrar por tipo de payload",
+        example: "daily-forecast",
       }),
       locationId: z.string().optional().openapi({
         param: { name: "locationId", in: "query" },
         description: "Filtrar por identificador da localização",
         example: "lisboa",
       }),
-      mode: z
-        .enum(["recent", "historical"])
-        .default("recent")
-        .openapi({
-          param: { name: "mode", in: "query" },
-          description: "Modo: 'recent' (valores atuais) ou 'historical' (séries temporais)",
-          example: "recent",
-        }),
       from: z.string().optional().openapi({
         param: { name: "from", in: "query" },
-        description: "Início do intervalo (ISO 8601, só modo historical)",
+        description: "Início do intervalo (ISO 8601)",
         example: "2026-01-01T00:00:00Z",
       }),
       to: z.string().optional().openapi({
         param: { name: "to", in: "query" },
-        description: "Fim do intervalo (ISO 8601, só modo historical)",
+        description: "Fim do intervalo (ISO 8601)",
         example: "2026-02-05T00:00:00Z",
       }),
       limit: z.coerce.number().int().min(1).max(500).default(50).openapi({
@@ -113,80 +93,41 @@ const search = createRoute({
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.openapi(search, async (c) => {
-  const { q, metric, entityId, adapterId, locationId, mode, from, to, limit, offset } =
-    c.req.valid("query");
+  const { adapterId, payloadType, locationId, from, to, limit, offset } = c.req.valid("query");
   const db = getDb(c.env);
 
-  if (mode === "historical") {
-    const conditions = [];
-    if (adapterId) conditions.push(eq(timeseries.adapterId, adapterId));
-    if (metric) conditions.push(eq(timeseries.metric, metric));
-    else if (q) conditions.push(like(timeseries.metric, `%${q}%`));
-    if (entityId) conditions.push(eq(timeseries.entityId, entityId));
-    if (locationId) conditions.push(eq(timeseries.locationId, locationId));
-    if (from) conditions.push(gte(timeseries.observedAt, new Date(from)));
-    if (to) conditions.push(lte(timeseries.observedAt, new Date(to)));
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const [{ total }] = await db
-      .select({ total: count() })
-      .from(timeseries)
-      .where(whereClause);
-
-    const rows = await db
-      .select()
-      .from(timeseries)
-      .where(whereClause)
-      .orderBy(desc(timeseries.observedAt))
-      .limit(limit)
-      .offset(offset);
-
-    return c.json({
-      data: rows.map((r) => ({
-        adapterId: r.adapterId,
-        metric: r.metric,
-        entityId: r.entityId,
-        locationId: r.locationId,
-        value: r.value,
-        metadata: r.metadata ? JSON.parse(r.metadata) : null,
-        observedAt: r.observedAt.toISOString(),
-      })),
-      pagination: { total, limit, offset, hasMore: offset + rows.length < total },
-    });
-  }
-
   const conditions = [];
-  if (adapterId) conditions.push(eq(latestValues.adapterId, adapterId));
-  if (metric) conditions.push(eq(latestValues.metric, metric));
-  else if (q) conditions.push(like(latestValues.metric, `%${q}%`));
-  if (entityId) conditions.push(eq(latestValues.entityId, entityId));
-  if (locationId) conditions.push(eq(latestValues.locationId, locationId));
+  if (adapterId) conditions.push(eq(apiData.apiSource, adapterId));
+  if (payloadType) conditions.push(eq(apiData.payloadType, payloadType));
+  if (locationId) conditions.push(eq(apiData.locationId, locationId));
+  if (from) conditions.push(gte(apiData.timestamp, new Date(from)));
+  if (to) conditions.push(lte(apiData.timestamp, new Date(to)));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [{ total }] = await db
     .select({ total: count() })
-    .from(latestValues)
+    .from(apiData)
     .where(whereClause);
 
   const rows = await db
     .select()
-    .from(latestValues)
+    .from(apiData)
     .where(whereClause)
-    .orderBy(desc(latestValues.observedAt))
+    .orderBy(desc(apiData.timestamp))
     .limit(limit)
     .offset(offset);
 
   return c.json({
     data: rows.map((r) => ({
-      adapterId: r.adapterId,
-      metric: r.metric,
-      entityId: r.entityId,
+      id: r.id,
+      apiSource: r.apiSource,
+      payloadType: r.payloadType,
       locationId: r.locationId,
-      value: r.value,
-      metadata: r.metadata ? JSON.parse(r.metadata) : null,
-      observedAt: r.observedAt.toISOString(),
+      timestamp: r.timestamp instanceof Date ? r.timestamp.toISOString() : String(r.timestamp),
+      payload: JSON.parse(r.payload) as Record<string, unknown>,
+      tags: r.tags ? (JSON.parse(r.tags) as string[]) : null,
+      scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
     })),
     pagination: { total, limit, offset, hasMore: offset + rows.length < total },
   });

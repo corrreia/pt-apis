@@ -15,13 +15,7 @@
  */
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type {
-  AdapterDefinition,
-  AdapterContext,
-  TimeseriesPoint,
-  DocumentInput,
-  LocationInput,
-} from "../../core/adapter";
+import type { AdapterDefinition, AdapterContext, DocumentInput } from "../../core/adapter";
 import { registry } from "../../core/registry";
 
 // ---------------------------------------------------------------------------
@@ -43,9 +37,8 @@ const API_URL = "https://example.com/api/data";
  * Main fetch handler – called by the scheduler on the configured frequency.
  *
  * Use `ctx` to:
- *   - `ctx.ingestTimeseries(adapterId, points)` → store numeric timeseries
+ *   - `ctx.storeApiData(adapterId, payloadType, payload, { locationId?, tags?, timestamp?, scrapedAt? })` → store a row in api_data
  *   - `ctx.uploadDocument(adapterId, doc)`       → upload a file to R2
- *   - `ctx.storeSnapshot(adapterId, type, data)` → store a JSON snapshot
  *   - `ctx.registerLocation(loc)`                → register a shared location
  *   - `ctx.log(...)`                             → structured logging
  */
@@ -74,16 +67,18 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
   //   district: "Lisboa",
   // });
 
-  // ── Example: Ingest timeseries with location ────────────────────────
-  // const points: TimeseriesPoint[] = parsed.items.map((item) => ({
-  //   metric: "my_metric",
-  //   entityId: item.id,
-  //   locationId: "lisbon",   // <-- links to the shared locations table
-  //   value: item.value,
-  //   metadata: { unit: "°C", location: item.name },
-  //   observedAt: new Date(item.timestamp),
-  // }));
-  // await ctx.ingestTimeseries(adapter.id, points);
+  // ── Example: Store api_data with location ───────────────────────────
+  // For each record, build a payload and call storeApiData. Use location_id
+  // and timestamp for consistent location/time queries across adapters.
+  //
+  // for (const item of parsed.items) {
+  //   const payload = { value: item.value, unit: "°C", name: item.name };
+  //   await ctx.storeApiData(adapter.id, "my-type", payload, {
+  //     locationId: "lisbon",  // optional, enables location-based queries
+  //     tags: ["weather", "temperature"],
+  //     timestamp: new Date(item.timestamp),
+  //   });
+  // }
 
   // ── Example: Upload a document ──────────────────────────────────────
   // const doc: DocumentInput = {
@@ -94,9 +89,6 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
   //   metadata: { year: 2026, month: 1 },
   // };
   // await ctx.uploadDocument(adapter.id, doc);
-
-  // ── Example: Store a snapshot ───────────────────────────────────────
-  // await ctx.storeSnapshot(adapter.id, "full-response", raw);
 
   ctx.log("Done.");
 }
@@ -131,7 +123,7 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
 // Optional: Custom schema
 // ---------------------------------------------------------------------------
 //
-// If your data doesn't fit the generic timeseries/documents/snapshots model,
+// If your data doesn't fit the api_data/documents model,
 // define your own Drizzle tables in a `schema.ts` file in this folder.
 // The Drizzle config glob picks them up automatically for migration generation.
 //
@@ -155,8 +147,8 @@ const adapter: AdapterDefinition = {
   sourceUrl: API_URL,
 
   // TODO: Which data types does this adapter produce?
-  // Options: "timeseries" | "document" | "snapshot"
-  dataTypes: ["timeseries"],
+  // Options: "api_data" | "document"
+  dataTypes: ["api_data"],
 
   // TODO: Configure schedule(s)
   // Options: "every_minute" | "every_5_minutes" | "every_15_minutes"

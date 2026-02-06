@@ -1,8 +1,16 @@
-import type { AdapterDefinition, AdapterContext, TimeseriesPoint } from "../../core/adapter";
+import type { AdapterDefinition, AdapterContext } from "../../core/adapter";
 import { registry } from "../../core/registry";
 import { IpmaUvResponseSchema } from "./types";
-import { IPMA_LOCATIONS, toLocationSlug, toLocationInput } from "../ipma/types";
+import { IPMA_LOCATIONS, toLocationInput, toLocationSlug } from "../ipma/types";
 import { createQualidadeArRoutes } from "./routes";
+
+function uvRiskLevel(iUv: number): string {
+  if (iUv <= 2) return "Low";
+  if (iUv <= 5) return "Moderate";
+  if (iUv <= 7) return "High";
+  if (iUv <= 10) return "Very high";
+  return "Extreme";
+}
 
 // ---------------------------------------------------------------------------
 // Fetch logic
@@ -26,39 +34,31 @@ async function fetchUvIndex(ctx: AdapterContext): Promise<void> {
     await ctx.registerLocation(toLocationInput(Number(idStr), info));
   }
 
-  // Store snapshot
-  await ctx.storeSnapshot(adapter.id, "uv-index", {
-    locationCount: parsed.data.length,
-    fetchedAt: new Date().toISOString(),
-  });
-
-  // Convert to timeseries
-  const points: TimeseriesPoint[] = [];
-
+  let count = 0;
   for (const item of parsed.data) {
     const info = IPMA_LOCATIONS[item.globalIdLocal];
     const cityName = info?.name ?? String(item.globalIdLocal);
-    const entityId = toLocationSlug(cityName);
     const locationId = info ? toLocationSlug(info.name) : undefined;
 
-    points.push({
-      metric: "uv_index",
-      entityId,
+    const observedAt = new Date(item.data);
+
+    const payload = {
+      uvIndex: item.iUv,
+      riskLevel: uvRiskLevel(item.iUv),
+      date: item.data,
+      peakStartTime: item.intervpicoMin ?? null,
+      peakEndTime: item.intervpicoMax ?? null,
+    };
+
+    await ctx.storeApiData(adapter.id, "uv-index", payload, {
       locationId,
-      value: item.iUv,
-      metadata: {
-        city: cityName,
-        globalIdLocal: item.globalIdLocal,
-        date: item.data,
-        peakStart: item.intervpicoMin ?? null,
-        peakEnd: item.intervpicoMax ?? null,
-      },
-      observedAt: new Date(item.data),
+      tags: ["uv", "air-quality"],
+      timestamp: observedAt,
     });
+    count++;
   }
 
-  const count = await ctx.ingestTimeseries(adapter.id, points);
-  ctx.log(`Ingested ${count} UV index points.`);
+  ctx.log(`Ingested ${count} UV index payloads.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ const adapter: AdapterDefinition = {
   description:
     "Previsões de índice UV para cidades portuguesas (IPMA). Inclui nível de risco, horas de pico e dados por localização. Para dados completos de qualidade do ar, integrar com QualAr/APA ou Porto Digital FIWARE.",
   sourceUrl: "https://api.ipma.pt/open-data/",
-  dataTypes: ["timeseries", "snapshot"],
+  dataTypes: ["api_data"],
   schedules: [
     {
       frequency: "hourly",

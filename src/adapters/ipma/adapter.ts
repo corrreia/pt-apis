@@ -1,4 +1,4 @@
-import type { AdapterDefinition, AdapterContext, TimeseriesPoint } from "../../core/adapter";
+import type { AdapterDefinition, AdapterContext } from "../../core/adapter";
 import { registry } from "../../core/registry";
 import {
   IpmaForecastResponseSchema,
@@ -7,6 +7,20 @@ import {
   toLocationInput,
 } from "./types";
 import { createIpmaRoutes } from "./routes";
+
+const WIND_DESCRIPTION: Record<number, string> = {
+  1: "Weak",
+  2: "Moderate",
+  3: "Strong",
+  4: "Very strong",
+};
+
+const PRECIPITATION_DESCRIPTION: Record<number, string> = {
+  0: "No precipitation",
+  1: "Weak",
+  2: "Moderate",
+  3: "Strong",
+};
 
 // ---------------------------------------------------------------------------
 // Fetch logic
@@ -31,101 +45,47 @@ async function fetchWeatherForecast(ctx: AdapterContext): Promise<void> {
     await ctx.registerLocation(toLocationInput(Number(idStr), info));
   }
 
-  // Store the raw response as a snapshot (for time-travel)
-  await ctx.storeSnapshot(adapter.id, "daily-forecast", {
-    forecastDate: parsed.forecastDate,
-    dataUpdate: parsed.dataUpdate,
-    locationCount: parsed.data.length,
-  });
-
-  // Convert to timeseries points
-  const points: TimeseriesPoint[] = [];
   const observedAt = new Date(parsed.dataUpdate);
+  let count = 0;
 
   for (const item of parsed.data) {
     const info = IPMA_LOCATIONS[item.globalIdLocal];
     const cityName = info?.name ?? String(item.globalIdLocal);
-    const entityId = toLocationSlug(cityName);
     const locationId = info ? toLocationSlug(info.name) : undefined;
 
-    const baseMetadata = {
-      city: cityName,
-      globalIdLocal: item.globalIdLocal,
-      latitude: parseFloat(item.latitude),
-      longitude: parseFloat(item.longitude),
+    const windClass = item.classWindSpeed;
+    const precIntClass = item.classPrecInt;
+
+    const payload = {
+      temperature: {
+        min: item.tMin,
+        max: item.tMax,
+        unit: "°C",
+      },
+      wind: {
+        direction: item.predWindDir ?? "N/A",
+        speedClass: windClass,
+        windSpeedDescription: WIND_DESCRIPTION[windClass] ?? "Unknown",
+      },
+      precipitation: {
+        probability: parseFloat(item.precipitaProb),
+        intensityClass: precIntClass,
+        precipitationDescription: PRECIPITATION_DESCRIPTION[precIntClass] ?? "Unknown",
+      },
+      weatherType: { id: item.idWeatherType },
       forecastDate: parsed.forecastDate,
+      dataUpdate: parsed.dataUpdate,
     };
 
-    // Temperature min
-    points.push({
-      metric: "temperature_min",
-      entityId,
+    await ctx.storeApiData(adapter.id, "daily-forecast", payload, {
       locationId,
-      value: item.tMin,
-      metadata: { ...baseMetadata, unit: "°C" },
-      observedAt,
+      tags: ["weather", "forecast"],
+      timestamp: observedAt,
     });
-
-    // Temperature max
-    points.push({
-      metric: "temperature_max",
-      entityId,
-      locationId,
-      value: item.tMax,
-      metadata: { ...baseMetadata, unit: "°C" },
-      observedAt,
-    });
-
-    // Precipitation probability
-    points.push({
-      metric: "precipitation_probability",
-      entityId,
-      locationId,
-      value: parseFloat(item.precipitaProb),
-      metadata: { ...baseMetadata, unit: "%" },
-      observedAt,
-    });
-
-    // Wind speed class (1=weak, 2=moderate, 3=strong, 4=very strong)
-    points.push({
-      metric: "wind_speed_class",
-      entityId,
-      locationId,
-      value: item.classWindSpeed,
-      metadata: {
-        ...baseMetadata,
-        windDirection: item.predWindDir,
-        scale: "1=weak, 2=moderate, 3=strong, 4=very strong",
-      },
-      observedAt,
-    });
-
-    // Precipitation intensity class
-    points.push({
-      metric: "precipitation_intensity_class",
-      entityId,
-      locationId,
-      value: item.classPrecInt,
-      metadata: {
-        ...baseMetadata,
-        scale: "0=none, 1=weak, 2=moderate, 3=strong",
-      },
-      observedAt,
-    });
-
-    // Weather type id
-    points.push({
-      metric: "weather_type_id",
-      entityId,
-      locationId,
-      value: item.idWeatherType,
-      metadata: baseMetadata,
-      observedAt,
-    });
+    count++;
   }
 
-  const count = await ctx.ingestTimeseries(adapter.id, points);
-  ctx.log(`Ingested ${count} timeseries points from ${parsed.data.length} locations.`);
+  ctx.log(`Ingested ${count} daily-forecast payloads from ${parsed.data.length} locations.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +99,7 @@ const adapter: AdapterDefinition = {
   description:
     "Previsões meteorológicas diárias para as capitais de distrito e ilhas, do Instituto do Mar e da Atmosfera (IPMA). Inclui temperatura, precipitação, vento e tipo de tempo.",
   sourceUrl: "https://api.ipma.pt/open-data/",
-  dataTypes: ["timeseries", "snapshot"],
+  dataTypes: ["api_data"],
   schedules: [
     {
       frequency: "every_15_minutes",

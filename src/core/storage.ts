@@ -1,15 +1,13 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../db/client";
 import {
-  timeseries,
-  latestValues,
+  apiData,
   documents,
-  snapshots,
   locations,
   ingestLog,
 } from "../db/schema";
 import type {
-  TimeseriesPoint,
+  ApiDataInput,
   DocumentInput,
   LocationInput,
   AdapterContext,
@@ -53,61 +51,37 @@ export async function registerLocation(
 }
 
 // ---------------------------------------------------------------------------
-// Timeseries ingestion
+// ApiData storage
 // ---------------------------------------------------------------------------
 
 /**
- * Batch-insert timeseries rows and upsert the latest_values table.
- * Returns the number of rows inserted.
+ * Store a row in api_data.
+ * Returns the id of the inserted row.
  */
-export async function ingestTimeseries(
+export async function storeApiData(
   db: Db,
   adapterId: string,
-  points: TimeseriesPoint[],
-): Promise<number> {
-  if (points.length === 0) return 0;
-
+  payloadType: string,
+  payload: unknown,
+  options?: ApiDataInput,
+): Promise<string> {
   const now = new Date();
+  const timestamp = options?.timestamp ?? now;
+  const scrapedAt = options?.scrapedAt ?? now;
+  const id = `${adapterId}:${payloadType}:${options?.locationId ?? "global"}:${timestamp.getTime()}:${crypto.randomUUID().slice(0, 8)}`;
 
-  // Insert into the append-only timeseries table
-  const rows = points.map((p) => ({
-    adapterId,
-    metric: p.metric,
-    entityId: p.entityId,
-    locationId: p.locationId ?? null,
-    value: p.value,
-    metadata: p.metadata ? JSON.stringify(p.metadata) : null,
-    observedAt: p.observedAt,
-    ingestedAt: now,
-  }));
+  await db.insert(apiData).values({
+    id,
+    apiSource: adapterId,
+    payloadType,
+    timestamp,
+    locationId: options?.locationId ?? null,
+    payload: JSON.stringify(payload),
+    tags: options?.tags ? JSON.stringify(options.tags) : null,
+    scrapedAt,
+  });
 
-  await db.insert(timeseries).values(rows);
-
-  // Upsert latest values
-  for (const p of points) {
-    await db
-      .insert(latestValues)
-      .values({
-        adapterId,
-        metric: p.metric,
-        entityId: p.entityId,
-        locationId: p.locationId ?? null,
-        value: p.value,
-        metadata: p.metadata ? JSON.stringify(p.metadata) : null,
-        observedAt: p.observedAt,
-      })
-      .onConflictDoUpdate({
-        target: [latestValues.adapterId, latestValues.metric, latestValues.entityId],
-        set: {
-          value: p.value,
-          locationId: p.locationId ?? null,
-          metadata: p.metadata ? JSON.stringify(p.metadata) : null,
-          observedAt: p.observedAt,
-        },
-      });
-  }
-
-  return rows.length;
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,27 +129,6 @@ export async function uploadDocument(
   });
 
   return docId;
-}
-
-// ---------------------------------------------------------------------------
-// Snapshot storage
-// ---------------------------------------------------------------------------
-
-/** Store a JSON snapshot in D1. */
-export async function storeSnapshot(
-  db: Db,
-  adapterId: string,
-  snapshotType: string,
-  data: unknown,
-  locationId?: string,
-): Promise<void> {
-  await db.insert(snapshots).values({
-    adapterId,
-    snapshotType,
-    locationId: locationId ?? null,
-    data: JSON.stringify(data),
-    capturedAt: new Date(),
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -242,14 +195,11 @@ export function createAdapterContext(env: Env, db: Db): AdapterContext {
     cache: env.CACHE,
     log: (...args: unknown[]) => console.log("[adapter]", ...args),
 
-    ingestTimeseries: (adapterId, points) =>
-      ingestTimeseries(db, adapterId, points),
+    storeApiData: (adapterId, payloadType, payload, options) =>
+      storeApiData(db, adapterId, payloadType, payload, options),
 
     uploadDocument: (adapterId, doc) =>
       uploadDocument(db, env.DOCUMENTS, adapterId, doc),
-
-    storeSnapshot: (adapterId, type, data, locationId) =>
-      storeSnapshot(db, adapterId, type, data, locationId),
 
     registerLocation: (loc) => registerLocation(db, loc),
   };

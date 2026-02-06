@@ -40,7 +40,7 @@ curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 | `name`        | Sim         | Nome legivel para exibicao.                          |
 | `description` | Sim         | O que este adapter faz.                              |
 | `sourceUrl`   | Sim         | URL da fonte de dados publica upstream.              |
-| `dataTypes`   | Sim         | Array de: `"timeseries"`, `"document"`, `"snapshot"` |
+| `dataTypes`   | Sim         | Array de: `"api_data"`, `"document"` |
 | `schedules`   | Sim         | Array de configuracoes de agendamento cron.          |
 | `openApiTag`  | Nao         | Tag curta para docs OpenAPI (default: name).         |
 | `features`    | Nao         | `{ hasLocations?: boolean }` — default true.         |
@@ -75,16 +75,12 @@ await ctx.registerLocation({
   district: "Lisboa",
 });
 
-// Armazenar dados de timeseries numericos (upsert automatico nos valores mais recentes)
-await ctx.ingestTimeseries(adapter.id, [
-  {
-    metric: "temperature",
-    entityId: "lisbon",
-    locationId: "lisbon",  // liga a tabela partilhada de localizacoes
-    value: 22.5,
-    observedAt: new Date(),
-  },
-]);
+// Armazenar dados em api_data (payload JSON, location_id e timestamp para queries consistentes)
+await ctx.storeApiData(adapter.id, "my-type", { temperature: 22.5, unit: "°C" }, {
+  locationId: "lisbon",  // opcional, permite queries por localizacao
+  tags: ["weather"],
+  timestamp: new Date(),  // hora de observacao
+});
 
 // Fazer upload de um ficheiro para o R2
 const docId = await ctx.uploadDocument(adapter.id, {
@@ -93,9 +89,6 @@ const docId = await ctx.uploadDocument(adapter.id, {
   data: arrayBuffer,
   locationId: "lisbon",  // opcional
 });
-
-// Armazenar um snapshot JSON para viajar no tempo
-await ctx.storeSnapshot(adapter.id, "full-response", jsonData);
 ```
 
 ## Localizacoes
@@ -119,12 +112,12 @@ await ctx.registerLocation({
 });
 ```
 
-Depois referencia `locationId: "porto-campanha"` ao ingerir timeseries,
-fazer upload de documentos ou armazenar snapshots.
+Depois referencia `locationId: "porto-campanha"` ao chamar storeApiData
+ou fazer upload de documentos.
 
 ## Tabelas Personalizadas
 
-Se os teus dados nao encaixam no modelo generico de timeseries/documentos/snapshots,
+Se os teus dados nao encaixam no modelo generico de api_data/documentos,
 podes definir as tuas proprias tabelas Drizzle:
 
 1. Renomear `schema.ts.example` para `schema.ts`

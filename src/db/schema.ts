@@ -1,11 +1,4 @@
-import {
-  sqliteTable,
-  integer,
-  text,
-  real,
-  primaryKey,
-  index,
-} from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real, index } from "drizzle-orm/sqlite-core";
 
 // ---------------------------------------------------------------------------
 // Sources  (one row per registered adapter)
@@ -47,54 +40,26 @@ export const locations = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Timeseries  (append-only data store)
+// ApiData  (unified table for all adapter payloads)
 // ---------------------------------------------------------------------------
 
-export const timeseries = sqliteTable(
-  "timeseries",
+export const apiData = sqliteTable(
+  "api_data",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    adapterId: text("adapter_id").notNull(),
-    metric: text("metric").notNull(),
-    entityId: text("entity_id").notNull(),
-    locationId: text("location_id"), // optional FK to locations.id
-    value: real("value").notNull(),
-    metadata: text("metadata"), // JSON string
-    observedAt: integer("observed_at", { mode: "timestamp" }).notNull(),
-    ingestedAt: integer("ingested_at", { mode: "timestamp" }).notNull(),
+    id: text("id").primaryKey(),
+    apiSource: text("api_source").notNull(),
+    payloadType: text("payload_type").notNull(),
+    timestamp: integer("timestamp", { mode: "timestamp" }).notNull(),
+    locationId: text("location_id"),
+    payload: text("payload").notNull(), // JSON
+    tags: text("tags"), // JSON array
+    scrapedAt: integer("scraped_at", { mode: "timestamp" }).notNull(),
   },
   (table) => [
-    index("ts_adapter_metric_entity_idx").on(
-      table.adapterId,
-      table.metric,
-      table.entityId,
-      table.observedAt,
-    ),
-    index("ts_observed_at_idx").on(table.observedAt),
-    index("ts_location_idx").on(table.locationId),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Latest values  (materialized "current" view – upserted on ingest)
-// ---------------------------------------------------------------------------
-
-export const latestValues = sqliteTable(
-  "latest_values",
-  {
-    adapterId: text("adapter_id").notNull(),
-    metric: text("metric").notNull(),
-    entityId: text("entity_id").notNull(),
-    locationId: text("location_id"), // optional FK to locations.id
-    value: real("value").notNull(),
-    metadata: text("metadata"), // JSON string
-    observedAt: integer("observed_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.adapterId, table.metric, table.entityId],
-    }),
-    index("lv_location_idx").on(table.locationId),
+    index("idx_api_data_timestamp").on(table.timestamp),
+    index("idx_api_data_source_time").on(table.apiSource, table.timestamp),
+    index("idx_api_data_location").on(table.locationId),
+    index("idx_api_data_source_type").on(table.apiSource, table.payloadType),
   ],
 );
 
@@ -118,30 +83,6 @@ export const documents = sqliteTable(
   (table) => [
     index("doc_adapter_idx").on(table.adapterId),
     index("doc_location_idx").on(table.locationId),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Snapshots  (point-in-time JSON captures)
-// ---------------------------------------------------------------------------
-
-export const snapshots = sqliteTable(
-  "snapshots",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    adapterId: text("adapter_id").notNull(),
-    snapshotType: text("snapshot_type").notNull(),
-    locationId: text("location_id"), // optional FK to locations.id
-    data: text("data").notNull(), // JSON blob
-    capturedAt: integer("captured_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => [
-    index("snap_adapter_type_idx").on(
-      table.adapterId,
-      table.snapshotType,
-      table.capturedAt,
-    ),
-    index("snap_location_idx").on(table.locationId),
   ],
 );
 
@@ -172,9 +113,7 @@ export const ingestLog = sqliteTable(
 export const dbSchema = {
   sources,
   locations,
-  timeseries,
-  latestValues,
+  apiData,
   documents,
-  snapshots,
   ingestLog,
 };
