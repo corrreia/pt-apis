@@ -276,23 +276,21 @@ export async function uploadDocument(
 export async function logIngestStart(
   db: Db,
   adapterId: string,
-): Promise<number> {
-  const result = await db
-    .insert(ingestLog)
-    .values({
-      adapterId,
-      status: "running",
-      recordsCount: 0,
-      startedAt: new Date(),
-    })
-    .returning({ id: ingestLog.id });
-
-  return result[0].id;
+): Promise<string> {
+  const id = crypto.randomUUID();
+  await db.insert(ingestLog).values({
+    id,
+    adapterId,
+    status: "running",
+    recordsCount: 0,
+    startedAt: new Date(),
+  });
+  return id;
 }
 
 export async function logIngestSuccess(
   db: Db,
-  logId: number,
+  logId: string,
   recordsCount: number,
 ): Promise<void> {
   await db
@@ -307,7 +305,7 @@ export async function logIngestSuccess(
 
 export async function logIngestError(
   db: Db,
-  logId: number,
+  logId: string,
   error: string,
 ): Promise<void> {
   await db

@@ -15,6 +15,13 @@
       "when": 1770388057828,
       "tag": "0001_true_onslaught",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770388432402,
+      "tag": "0002_loving_peter_quill",
+      "breakpoints": true
     }
   ]
 }

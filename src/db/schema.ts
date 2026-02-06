@@ -96,7 +96,7 @@ export const documents = sqliteTable(
 export const ingestLog = sqliteTable(
   "ingest_log",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: text("id").primaryKey(), // UUID, avoids RETURNING (unsupported by Drizzle D1)
     adapterId: text("adapter_id").notNull(),
     status: text("status").notNull(), // "running" | "success" | "error"
     recordsCount: integer("records_count").default(0),
