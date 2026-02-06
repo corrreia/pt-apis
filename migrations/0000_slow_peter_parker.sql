@@ -13,6 +13,7 @@ CREATE INDEX `idx_api_data_timestamp` ON `api_data` (`timestamp`);--> statement-
 CREATE INDEX `idx_api_data_source_time` ON `api_data` (`api_source`,`timestamp`);--> statement-breakpoint
 CREATE INDEX `idx_api_data_location` ON `api_data` (`location_id`);--> statement-breakpoint
 CREATE INDEX `idx_api_data_source_type` ON `api_data` (`api_source`,`payload_type`);--> statement-breakpoint
+CREATE INDEX `idx_api_data_source_type_time` ON `api_data` (`api_source`,`payload_type`,`timestamp`);--> statement-breakpoint
 CREATE TABLE `documents` (
 	`id` text PRIMARY KEY NOT NULL,
 	`adapter_id` text NOT NULL,

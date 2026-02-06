@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "39eabb02-032e-4dfa-88f3-359df685bd5c",
+  "id": "791e1539-d296-463e-9e88-427398b01e82",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_data": {
@@ -92,6 +92,15 @@
           "columns": [
             "api_source",
             "payload_type"
+          ],
+          "isUnique": false
+        },
+        "idx_api_data_source_type_time": {
+          "name": "idx_api_data_source_type_time",
+          "columns": [
+            "api_source",
+            "payload_type",
+            "timestamp"
           ],
           "isUnique": false
         }
