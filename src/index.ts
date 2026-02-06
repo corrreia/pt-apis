@@ -16,6 +16,7 @@ import { mountDocs } from "./api/openapi";
 import { handleScheduled } from "./core/scheduler";
 import { seedSources } from "./adapters/seed";
 import { registry } from "./core/registry";
+import { rateLimit } from "./core/rate-limit";
 
 // ---------------------------------------------------------------------------
 // App
@@ -23,9 +24,19 @@ import { registry } from "./core/registry";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+// Security headers
+app.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("X-Content-Type-Options", "nosniff");
+  c.res.headers.set("X-Frame-Options", "DENY");
+});
+
 // Global middleware
 app.use("*", cors());
 app.use("*", logger());
+
+// Rate limit all /v1/* API routes (100 req/min per IP)
+app.use("/v1/*", rateLimit({ binding: "RATE_LIMITER" }));
 
 // Seed sources table on first request
 let seeded = false;
@@ -79,7 +90,6 @@ app.get("/", (c) => {
       name: a.name,
       dataTypes: a.dataTypes,
       hasCustomRoutes: !!a.routes,
-      hasCustomSchema: !!a.schema,
     })),
     endpoints: {
       sources: "/v1/sources",

@@ -2,6 +2,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "../../db/client";
 import { apiData } from "../../db/schema";
 import { eq, and, desc, gte, lte, count } from "drizzle-orm";
+import { kvCache, cacheControl } from "../../core/cache";
+import { rateLimit } from "../../core/rate-limit";
 import { PaginacaoSchema } from "../schemas";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +93,11 @@ const search = createRoute({
 // ---------------------------------------------------------------------------
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+// Stricter rate limit for search (30 req/min per IP)
+app.use("/v1/search", rateLimit({ binding: "RATE_LIMITER_SEARCH", keyPrefix: "search" }));
+app.use("/v1/search", kvCache({ ttlSeconds: 120, prefix: "search" }));
+app.use("/v1/search", cacheControl(60, 120));
 
 app.openapi(search, async (c) => {
   const { adapterId, payloadType, locationId, from, to, limit, offset } = c.req.valid("query");

@@ -60,6 +60,7 @@ export const apiData = sqliteTable(
     index("idx_api_data_source_time").on(table.apiSource, table.timestamp),
     index("idx_api_data_location").on(table.locationId),
     index("idx_api_data_source_type").on(table.apiSource, table.payloadType),
+    index("idx_api_data_source_type_time").on(table.apiSource, table.payloadType, table.timestamp),
   ],
 );
 

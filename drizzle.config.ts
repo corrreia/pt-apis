@@ -26,8 +26,7 @@ function getLocalD1DB(): string | undefined {
 }
 
 export default defineConfig({
-  // Core schema + any adapter-specific schemas (adapters can add their own tables)
-  schema: ["./src/db/schema.ts", "./src/adapters/*/schema.ts"],
+  schema: ["./src/db/schema.ts"],
   out: "./migrations",
   dialect: "sqlite",
   dbCredentials: {

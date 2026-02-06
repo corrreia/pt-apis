@@ -81,13 +81,20 @@ export interface AdapterContext {
   cache: KVNamespace;
   log: (...args: unknown[]) => void;
 
-  /** Store a row in api_data. Adapters provide payload_type and payload; location_id and timestamp enable consistent queries. */
+  /** Store a row in api_data. Returns the generated id. */
   storeApiData(
     adapterId: string,
     payloadType: string,
     payload: unknown,
     options?: ApiDataInput,
   ): Promise<string>;
+
+  /** Batch-insert multiple rows into api_data in a single query. Returns the generated ids. */
+  storeBatchApiData(
+    adapterId: string,
+    payloadType: string,
+    items: Array<{ payload: unknown; options?: ApiDataInput }>,
+  ): Promise<string[]>;
 
   /** Upload a document to R2 and record metadata in D1. */
   uploadDocument(adapterId: string, doc: DocumentInput): Promise<string>;
@@ -154,13 +161,6 @@ export interface AdapterDefinition {
    * Not enforced — locationId remains optional in data types.
    */
   features?: AdapterFeatures;
-  /**
-   * Optional: custom Drizzle schema tables defined by this adapter.
-   * Used for discovery/documentation. The adapter imports its own tables
-   * directly at runtime. Drizzle Kit picks them up via the glob in
-   * drizzle.config.ts.
-   */
-  schema?: Record<string, unknown>;
   /**
    * Optional: custom OpenAPIHono sub-app with adapter-specific routes.
    * Auto-mounted at `/v1/{adapter.id}/...` so routes appear in the

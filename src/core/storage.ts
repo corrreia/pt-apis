@@ -14,6 +14,40 @@ import type {
 } from "./adapter";
 
 // ---------------------------------------------------------------------------
+// Retry helper
+// ---------------------------------------------------------------------------
+
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 200;
+
+/**
+ * Retry a function with exponential backoff for transient D1/network errors.
+ * Only retries on errors that look transient (network, D1 internal, busy).
+ */
+async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const isTransient =
+        message.includes("SQLITE_BUSY") ||
+        message.includes("D1_ERROR") ||
+        message.includes("network") ||
+        message.includes("fetch failed") ||
+        message.includes("Too many requests");
+      if (!isTransient || attempt === MAX_RETRIES - 1) throw error;
+      const delay = BASE_DELAY_MS * 2 ** attempt;
+      console.warn(`[storage] ${label} attempt ${attempt + 1} failed, retrying in ${delay}ms:`, message);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
+// ---------------------------------------------------------------------------
 // Location registration
 // ---------------------------------------------------------------------------
 
@@ -22,32 +56,36 @@ export async function registerLocation(
   db: Db,
   loc: LocationInput,
 ): Promise<void> {
-  await db
-    .insert(locations)
-    .values({
-      id: loc.id,
-      name: loc.name,
-      latitude: loc.latitude ?? null,
-      longitude: loc.longitude ?? null,
-      type: loc.type,
-      region: loc.region ?? null,
-      district: loc.district ?? null,
-      municipality: loc.municipality ?? null,
-      metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
-    })
-    .onConflictDoUpdate({
-      target: locations.id,
-      set: {
-        name: loc.name,
-        latitude: loc.latitude ?? null,
-        longitude: loc.longitude ?? null,
-        type: loc.type,
-        region: loc.region ?? null,
-        district: loc.district ?? null,
-        municipality: loc.municipality ?? null,
-        metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
-      },
-    });
+  await withRetry(
+    () =>
+      db
+        .insert(locations)
+        .values({
+          id: loc.id,
+          name: loc.name,
+          latitude: loc.latitude ?? null,
+          longitude: loc.longitude ?? null,
+          type: loc.type,
+          region: loc.region ?? null,
+          district: loc.district ?? null,
+          municipality: loc.municipality ?? null,
+          metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
+        })
+        .onConflictDoUpdate({
+          target: locations.id,
+          set: {
+            name: loc.name,
+            latitude: loc.latitude ?? null,
+            longitude: loc.longitude ?? null,
+            type: loc.type,
+            region: loc.region ?? null,
+            district: loc.district ?? null,
+            municipality: loc.municipality ?? null,
+            metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
+          },
+        }),
+    "registerLocation",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -70,18 +108,78 @@ export async function storeApiData(
   const scrapedAt = options?.scrapedAt ?? now;
   const id = `${adapterId}:${payloadType}:${options?.locationId ?? "global"}:${timestamp.getTime()}:${crypto.randomUUID().slice(0, 8)}`;
 
-  await db.insert(apiData).values({
-    id,
-    apiSource: adapterId,
-    payloadType,
-    timestamp,
-    locationId: options?.locationId ?? null,
-    payload: JSON.stringify(payload),
-    tags: options?.tags ? JSON.stringify(options.tags) : null,
-    scrapedAt,
-  });
+  await withRetry(
+    () =>
+      db.insert(apiData).values({
+        id,
+        apiSource: adapterId,
+        payloadType,
+        timestamp,
+        locationId: options?.locationId ?? null,
+        payload: JSON.stringify(payload),
+        tags: options?.tags ? JSON.stringify(options.tags) : null,
+        scrapedAt,
+      }),
+    "storeApiData",
+  );
 
   return id;
+}
+
+/**
+ * D1 max variables per statement is ~100 columns × rows.
+ * api_data has 8 columns, so ~100 rows per chunk is safe with margin.
+ */
+const BATCH_CHUNK_SIZE = 100;
+
+/**
+ * Batch-insert multiple rows into api_data.
+ * Chunks large arrays to stay within D1 statement limits and wraps
+ * the entire operation in a transaction for atomicity.
+ * Returns the ids of all inserted rows.
+ */
+export async function storeBatchApiData(
+  db: Db,
+  adapterId: string,
+  payloadType: string,
+  items: Array<{ payload: unknown; options?: ApiDataInput }>,
+): Promise<string[]> {
+  if (items.length === 0) return [];
+
+  const now = new Date();
+  const rows = items.map((item) => {
+    const timestamp = item.options?.timestamp ?? now;
+    const scrapedAt = item.options?.scrapedAt ?? now;
+    const id = `${adapterId}:${payloadType}:${item.options?.locationId ?? "global"}:${timestamp.getTime()}:${crypto.randomUUID().slice(0, 8)}`;
+
+    return {
+      id,
+      apiSource: adapterId,
+      payloadType,
+      timestamp,
+      locationId: item.options?.locationId ?? null,
+      payload: JSON.stringify(item.payload),
+      tags: item.options?.tags ? JSON.stringify(item.options.tags) : null,
+      scrapedAt,
+    };
+  });
+
+  // D1 supports batch() which wraps multiple statements in a transaction
+  await withRetry(async () => {
+    if (rows.length <= BATCH_CHUNK_SIZE) {
+      await db.insert(apiData).values(rows);
+    } else {
+      const chunks: (typeof rows)[] = [];
+      for (let i = 0; i < rows.length; i += BATCH_CHUNK_SIZE) {
+        chunks.push(rows.slice(i, i + BATCH_CHUNK_SIZE));
+      }
+      // db.batch() requires a tuple with at least one element — we know chunks is non-empty
+      const statements = chunks.map((chunk) => db.insert(apiData).values(chunk));
+      await db.batch(statements as unknown as [typeof statements[0], ...typeof statements]);
+    }
+  }, "storeBatchApiData");
+
+  return rows.map((r) => r.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +295,9 @@ export function createAdapterContext(env: Env, db: Db): AdapterContext {
 
     storeApiData: (adapterId, payloadType, payload, options) =>
       storeApiData(db, adapterId, payloadType, payload, options),
+
+    storeBatchApiData: (adapterId, payloadType, items) =>
+      storeBatchApiData(db, adapterId, payloadType, items),
 
     uploadDocument: (adapterId, doc) =>
       uploadDocument(db, env.DOCUMENTS, adapterId, doc),

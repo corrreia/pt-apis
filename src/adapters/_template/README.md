@@ -4,7 +4,7 @@ Utiliza este template para criar um novo adapter de fonte de dados.
 
 ## Inicio Rapido
 
-**Checklist:** Copiar pasta → Editar adapter.ts → Adicionar import em index.ts → (Se custom schema) renomear schema.ts.example → db:generate → wrangler dev
+**Checklist:** Copiar pasta → Editar adapter.ts + types.ts → Adicionar import em index.ts → wrangler dev
 
 ```bash
 # 1. Copiar o template
@@ -19,18 +19,22 @@ cp -r src/adapters/_template src/adapters/my-source
 #    Adicionar esta linha a src/adapters/index.ts:
 #    import "./my-source/adapter";
 
-# 4. (Opcional) Se usas tabelas personalizadas:
-#    - Renomear schema.ts.example para schema.ts
-#    - Executar wrangler dev uma vez para criar a BD local
-#    - Depois: bun run db:generate
-
-# 5. Testar localmente
+# 4. Testar localmente
 bun run dev
 # Noutro terminal:
 curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 ```
 
-**Nota:** O `db:generate` requer que a BD D1 local exista. Executa `wrangler dev` uma vez antes de gerar migracoes.
+## Estrutura de Ficheiros
+
+| Ficheiro       | Descricao                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------ |
+| `adapter.ts`   | Definicao do adapter: id, nome, schedules, rotas. Ponto de entrada.                                          |
+| `types.ts`     | Tipos TypeScript e schemas Zod: upstream response, payload interfaces, API response schemas.                  |
+| `routes.ts`    | (Opcional) Rotas Hono personalizadas, montadas automaticamente em `/v1/{adapter.id}/...`.                     |
+
+O adapter define tudo o que precisa dentro da sua pasta. O core apenas armazena e devolve JSON —
+todos os tipos de dominio vivem em `types.ts`.
 
 ## Campos do Adapter
 
@@ -45,7 +49,6 @@ curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 | `openApiTag`  | Nao         | Tag curta para docs OpenAPI (default: name).         |
 | `features`    | Nao         | `{ hasLocations?: boolean }` — default true.         |
 | `routes`      | Nao         | Sub-app OpenAPIHono personalizada (montada automaticamente + na documentacao). |
-| `schema`      | Nao         | Referencia a tabelas Drizzle personalizadas.         |
 
 ## Frequencias de Agendamento
 
@@ -75,12 +78,19 @@ await ctx.registerLocation({
   district: "Lisboa",
 });
 
-// Armazenar dados em api_data (payload JSON, location_id e timestamp para queries consistentes)
+// Armazenar um unico registo em api_data
 await ctx.storeApiData(adapter.id, "my-type", { temperature: 22.5, unit: "°C" }, {
   locationId: "lisbon",  // opcional, permite queries por localizacao
   tags: ["weather"],
   timestamp: new Date(),  // hora de observacao
 });
+
+// Batch-insert (recomendado quando tens multiplos registos, e.g. um por cidade)
+const items = data.map((item) => ({
+  payload: { value: item.value, unit: "°C" },
+  options: { locationId: item.locationId, tags: ["weather"], timestamp: new Date(item.ts) },
+}));
+const ids = await ctx.storeBatchApiData(adapter.id, "my-type", items);
 
 // Fazer upload de um ficheiro para o R2
 const docId = await ctx.uploadDocument(adapter.id, {
@@ -114,19 +124,6 @@ await ctx.registerLocation({
 
 Depois referencia `locationId: "porto-campanha"` ao chamar storeApiData
 ou fazer upload de documentos.
-
-## Tabelas Personalizadas
-
-Se os teus dados nao encaixam no modelo generico de api_data/documentos,
-podes definir as tuas proprias tabelas Drizzle:
-
-1. Renomear `schema.ts.example` para `schema.ts`
-2. Definir as tuas tabelas (prefixar nomes com o id do adapter para evitar colisoes)
-3. Importar e utilizar no teu adapter e rotas
-4. Executar `wrangler dev` uma vez para criar a BD D1 local (necessario antes de db:generate)
-5. Executar `bun run db:generate` para criar a migracao
-
-A configuracao do Drizzle descobre automaticamente os ficheiros `src/adapters/*/schema.ts`.
 
 ## Armazenamento R2
 

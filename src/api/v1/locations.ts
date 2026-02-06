@@ -2,7 +2,8 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getDb } from "../../db/client";
 import { locations, apiData, documents } from "../../db/schema";
 import { eq, and, like, desc, count } from "drizzle-orm";
-import { kvCache } from "../../core/cache";
+import { kvCache, cacheControl } from "../../core/cache";
+import { rateLimit } from "../../core/rate-limit";
 import { ErroSchema } from "../schemas";
 
 // ---------------------------------------------------------------------------
@@ -23,27 +24,40 @@ const LocationSchema = z
   })
   .openapi("Location");
 
+const PaginationInfoSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  hasMore: z.boolean(),
+});
+
 const LocationDataSchema = z
   .object({
-    apiData: z.array(
-      z.object({
-        id: z.string(),
-        apiSource: z.string().openapi({ description: "Identificador do adapter" }),
-        payloadType: z.string().openapi({ description: "Tipo do payload" }),
-        payload: z.record(z.string(), z.unknown()).openapi({ description: "Payload JSON" }),
-        timestamp: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
-        scrapedAt: z.string().openapi({ description: "Hora de ingestão (ISO 8601)" }),
-      }),
-    ).openapi({ description: "Dados api_data associados a esta localização" }),
-    documents: z.array(
-      z.object({
-        id: z.string(),
-        adapterId: z.string(),
-        name: z.string(),
-        contentType: z.string(),
-        capturedAt: z.string(),
-      }),
-    ).openapi({ description: "Documentos associados a esta localização" }),
+    apiData: z.object({
+      items: z.array(
+        z.object({
+          id: z.string(),
+          apiSource: z.string().openapi({ description: "Identificador do adapter" }),
+          payloadType: z.string().openapi({ description: "Tipo do payload" }),
+          payload: z.record(z.string(), z.unknown()).openapi({ description: "Payload JSON" }),
+          timestamp: z.string().openapi({ description: "Hora de observação (ISO 8601)" }),
+          scrapedAt: z.string().openapi({ description: "Hora de ingestão (ISO 8601)" }),
+        }),
+      ),
+      pagination: PaginationInfoSchema,
+    }).openapi({ description: "Dados api_data associados a esta localização" }),
+    documents: z.object({
+      items: z.array(
+        z.object({
+          id: z.string(),
+          adapterId: z.string(),
+          name: z.string(),
+          contentType: z.string(),
+          capturedAt: z.string(),
+        }),
+      ),
+      pagination: PaginationInfoSchema,
+    }).openapi({ description: "Documentos associados a esta localização" }),
   })
   .openapi("LocationData");
 
@@ -140,13 +154,35 @@ const getLocationData = createRoute({
   tags: ["Locations"],
   summary: "Todos os dados de uma localização",
   description:
-    "Consulta cross-source: devolve api_data e documentos associados a esta localização de todos os adapters.",
+    "Consulta cross-source: devolve api_data e documentos associados a esta localização de todos os adapters. Suporta paginação independente para api_data e documentos.",
   request: {
     params: z.object({
       locationId: z.string().openapi({
         param: { name: "locationId", in: "path" },
         description: "Identificador da localização (slug)",
         example: "lisboa",
+      }),
+    }),
+    query: z.object({
+      apiDataLimit: z.coerce.number().int().min(1).max(500).default(50).openapi({
+        param: { name: "apiDataLimit", in: "query" },
+        description: "Número máximo de registos api_data",
+        example: 50,
+      }),
+      apiDataOffset: z.coerce.number().int().min(0).default(0).openapi({
+        param: { name: "apiDataOffset", in: "query" },
+        description: "Offset de paginação para api_data",
+        example: 0,
+      }),
+      docLimit: z.coerce.number().int().min(1).max(100).default(20).openapi({
+        param: { name: "docLimit", in: "query" },
+        description: "Número máximo de documentos",
+        example: 20,
+      }),
+      docOffset: z.coerce.number().int().min(0).default(0).openapi({
+        param: { name: "docOffset", in: "query" },
+        description: "Offset de paginação para documentos",
+        example: 0,
       }),
     }),
   },
@@ -176,7 +212,11 @@ const getLocationData = createRoute({
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use("/v1/locations", kvCache({ ttlSeconds: 600, prefix: "loc" }));
+app.use("/v1/locations", cacheControl(300, 600));
+app.use("/v1/locations/*", cacheControl(300, 600));
+app.use("/v1/locations/*/data", rateLimit({ binding: "RATE_LIMITER_SEARCH", keyPrefix: "locdata" }));
 app.use("/v1/locations/*/data", kvCache({ ttlSeconds: 300, prefix: "locdata" }));
+app.use("/v1/locations/*/data", cacheControl(60, 120));
 
 app.openapi(listLocations, async (c) => {
   const { type, region, district, q, limit, offset } = c.req.valid("query");
@@ -251,6 +291,7 @@ app.openapi(getLocation, async (c) => {
 
 app.openapi(getLocationData, async (c) => {
   const { locationId } = c.req.valid("param");
+  const { apiDataLimit, apiDataOffset, docLimit, docOffset } = c.req.valid("query");
   const db = getDb(c.env);
 
   const [loc] = await db
@@ -263,19 +304,29 @@ app.openapi(getLocationData, async (c) => {
     return c.json({ error: "Location not found" } as const, 404);
   }
 
-  const [apiDataRows, docRows] = await Promise.all([
+  const [apiDataRows, docRows, [{ apiDataTotal }], [{ docTotal }]] = await Promise.all([
     db
       .select()
       .from(apiData)
       .where(eq(apiData.locationId, locationId))
       .orderBy(desc(apiData.timestamp))
-      .limit(500),
+      .limit(apiDataLimit)
+      .offset(apiDataOffset),
     db
       .select()
       .from(documents)
       .where(eq(documents.locationId, locationId))
       .orderBy(desc(documents.capturedAt))
-      .limit(100),
+      .limit(docLimit)
+      .offset(docOffset),
+    db
+      .select({ apiDataTotal: count() })
+      .from(apiData)
+      .where(eq(apiData.locationId, locationId)),
+    db
+      .select({ docTotal: count() })
+      .from(documents)
+      .where(eq(documents.locationId, locationId)),
   ]);
 
   return c.json(
@@ -292,21 +343,37 @@ app.openapi(getLocationData, async (c) => {
         metadata: loc.metadata ? JSON.parse(loc.metadata) : null,
       },
       data: {
-        apiData: apiDataRows.map((r) => ({
-          id: r.id,
-          apiSource: r.apiSource,
-          payloadType: r.payloadType,
-          payload: JSON.parse(r.payload) as Record<string, unknown>,
-          timestamp: r.timestamp instanceof Date ? r.timestamp.toISOString() : String(r.timestamp),
-          scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
-        })),
-        documents: docRows.map((r) => ({
-          id: r.id,
-          adapterId: r.adapterId,
-          name: r.name,
-          contentType: r.contentType,
-          capturedAt: r.capturedAt.toISOString(),
-        })),
+        apiData: {
+          items: apiDataRows.map((r) => ({
+            id: r.id,
+            apiSource: r.apiSource,
+            payloadType: r.payloadType,
+            payload: JSON.parse(r.payload) as Record<string, unknown>,
+            timestamp: r.timestamp instanceof Date ? r.timestamp.toISOString() : String(r.timestamp),
+            scrapedAt: r.scrapedAt instanceof Date ? r.scrapedAt.toISOString() : String(r.scrapedAt),
+          })),
+          pagination: {
+            total: apiDataTotal,
+            limit: apiDataLimit,
+            offset: apiDataOffset,
+            hasMore: apiDataOffset + apiDataRows.length < apiDataTotal,
+          },
+        },
+        documents: {
+          items: docRows.map((r) => ({
+            id: r.id,
+            adapterId: r.adapterId,
+            name: r.name,
+            contentType: r.contentType,
+            capturedAt: r.capturedAt.toISOString(),
+          })),
+          pagination: {
+            total: docTotal,
+            limit: docLimit,
+            offset: docOffset,
+            hasMore: docOffset + docRows.length < docTotal,
+          },
+        },
       },
     },
     200,

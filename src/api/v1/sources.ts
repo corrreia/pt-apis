@@ -3,6 +3,7 @@ import { registry } from "../../core/registry";
 import { getDb } from "../../db/client";
 import { sources, ingestLog } from "../../db/schema";
 import { eq, desc } from "drizzle-orm";
+import { kvCache, cacheControl } from "../../core/cache";
 import { ErroSchema } from "../schemas";
 
 // ---------------------------------------------------------------------------
@@ -19,7 +20,6 @@ const SourceSchema = z
     state: z.string().openapi({ description: "Estado atual da fonte", example: "active" }),
     lastCollectedAt: z.string().nullable().openapi({ description: "Última recolha de dados (ISO 8601)" }),
     hasCustomRoutes: z.boolean().openapi({ description: "Se o adapter define rotas personalizadas" }),
-    hasCustomSchema: z.boolean().openapi({ description: "Se o adapter define tabelas próprias" }),
     hasLocations: z.boolean().openapi({
       description: "Se este adapter contribui para a tabela de localizações partilhadas",
     }),
@@ -98,6 +98,11 @@ const getSource = createRoute({
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+// KV cache + HTTP cache headers for sources list
+app.use("/v1/sources", kvCache({ ttlSeconds: 600, prefix: "sources" }));
+app.use("/v1/sources", cacheControl(300, 600));
+app.use("/v1/sources/*", cacheControl(300, 600));
+
 app.openapi(listSources, async (c) => {
   const adapters = registry.getAll();
   const db = getDb(c.env);
@@ -114,7 +119,6 @@ app.openapi(listSources, async (c) => {
     state: "active",
     lastCollectedAt: fetchedMap.get(a.id)?.toISOString() ?? null,
     hasCustomRoutes: !!a.routes,
-    hasCustomSchema: !!a.schema,
     hasLocations: a.features?.hasLocations ?? true,
   }));
 
@@ -150,7 +154,6 @@ app.openapi(getSource, async (c) => {
     state: sourceRow?.status ?? "active",
     lastCollectedAt: sourceRow?.lastFetchedAt?.toISOString() ?? null,
     hasCustomRoutes: !!adapter.routes,
-    hasCustomSchema: !!adapter.schema,
     hasLocations: adapter.features?.hasLocations ?? true,
     schedules: adapter.schedules.map((s) => ({
       frequency: s.frequency as string,

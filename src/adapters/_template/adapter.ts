@@ -18,11 +18,9 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { AdapterDefinition, AdapterContext, DocumentInput } from "../../core/adapter";
 import { registry } from "../../core/registry";
 
-// ---------------------------------------------------------------------------
-// TODO: Define Zod schemas for the upstream API response (optional but nice)
-// import { z } from "@hono/zod-openapi";
-// const MyApiResponseSchema = z.object({ ... });
-// ---------------------------------------------------------------------------
+// Import your types — see types.ts for upstream schemas, payload interfaces,
+// and API response schemas.
+// import { MyUpstreamResponseSchema, type MyReadingPayload } from "./types";
 
 // ---------------------------------------------------------------------------
 // TODO: Set the upstream API URL
@@ -37,7 +35,8 @@ const API_URL = "https://example.com/api/data";
  * Main fetch handler – called by the scheduler on the configured frequency.
  *
  * Use `ctx` to:
- *   - `ctx.storeApiData(adapterId, payloadType, payload, { locationId?, tags?, timestamp?, scrapedAt? })` → store a row in api_data
+ *   - `ctx.storeApiData(adapterId, payloadType, payload, opts?)` → store one row in api_data
+ *   - `ctx.storeBatchApiData(adapterId, payloadType, items)` → batch-insert multiple rows (recommended for loops)
  *   - `ctx.uploadDocument(adapterId, doc)`       → upload a file to R2
  *   - `ctx.registerLocation(loc)`                → register a shared location
  *   - `ctx.log(...)`                             → structured logging
@@ -67,18 +66,23 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
   //   district: "Lisboa",
   // });
 
-  // ── Example: Store api_data with location ───────────────────────────
-  // For each record, build a payload and call storeApiData. Use location_id
-  // and timestamp for consistent location/time queries across adapters.
+  // ── Example: Batch-store api_data (recommended for multiple records) ─
+  // Build an array of { payload, options } and insert them all at once.
+  // Each adapter defines its own payload interfaces in types.ts.
   //
-  // for (const item of parsed.items) {
-  //   const payload = { value: item.value, unit: "°C", name: item.name };
-  //   await ctx.storeApiData(adapter.id, "my-type", payload, {
+  // const items = parsed.data.map((item) => ({
+  //   payload: { value: item.value, unit: "°C", label: item.label },
+  //   options: {
   //     locationId: "lisbon",  // optional, enables location-based queries
   //     tags: ["weather", "temperature"],
   //     timestamp: new Date(item.timestamp),
-  //   });
-  // }
+  //   },
+  // }));
+  // const ids = await ctx.storeBatchApiData(adapter.id, "my-reading", items);
+  // ctx.log(`Stored ${ids.length} records.`);
+  //
+  // For a single record, use storeApiData instead:
+  // await ctx.storeApiData(adapter.id, "my-reading", payload, { locationId, tags, timestamp });
 
   // ── Example: Upload a document ──────────────────────────────────────
   // const doc: DocumentInput = {
@@ -118,16 +122,6 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
 //   app.openapi(summaryRoute, async (c) => c.json({ total: 42 }));
 //   return app;
 // }
-
-// ---------------------------------------------------------------------------
-// Optional: Custom schema
-// ---------------------------------------------------------------------------
-//
-// If your data doesn't fit the api_data/documents model,
-// define your own Drizzle tables in a `schema.ts` file in this folder.
-// The Drizzle config glob picks them up automatically for migration generation.
-//
-// See src/adapters/_template/schema.ts.example for an example.
 
 // ---------------------------------------------------------------------------
 // Adapter definition

@@ -3,7 +3,7 @@ import { getDb } from "../../db/client";
 import { documents } from "../../db/schema";
 import { registry } from "../../core/registry";
 import { eq, and, desc } from "drizzle-orm";
-import { kvCache } from "../../core/cache";
+import { kvCache, cacheControl } from "../../core/cache";
 import { ErroSchema } from "../schemas";
 
 // ---------------------------------------------------------------------------
@@ -109,6 +109,7 @@ const getDocument = createRoute({
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.use("/v1/sources/*/documents", kvCache({ ttlSeconds: 600, prefix: "docs" }));
+app.use("/v1/sources/*/documents", cacheControl(300, 600));
 
 app.openapi(listDocuments, async (c) => {
   const { sourceId } = c.req.valid("param");
