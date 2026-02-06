@@ -316,7 +316,7 @@ async function obterRiscoIncendio(ctx: AdapterContext): Promise<void> {
     const itens = entradas.map(([_dico, loc]) => ({
       payload: {
         dataPrevisao: dados.dataPrev,
-        dico: loc.DICO,
+        dico: loc.dico,
         rcm: loc.data.rcm,
         latitude: loc.latitude,
         longitude: loc.longitude,
@@ -372,8 +372,8 @@ async function obterObservacoesEstacoes(ctx: AdapterContext): Promise<void> {
 
   for (const [dataHora, estacoes] of Object.entries(dados)) {
     for (const [idEstacao, obs] of Object.entries(estacoes)) {
-      // Ignorar entradas sem dados (valores -99.0 indicam estação indisponível)
-      if (obs.temperatura === -99.0 && obs.humidade === -99.0 && obs.pressao === -99.0) {
+      // Ignorar estações offline (null) ou sem dados (-99.0)
+      if (!obs || (obs.temperatura === -99.0 && obs.humidade === -99.0 && obs.pressao === -99.0)) {
         continue;
       }
 
@@ -690,7 +690,7 @@ function criarRotasTempo(def: AdapterDefinition) {
 
     let entradas = Object.values(dados.local).map((loc) => ({
       dataPrevisao: dados.dataPrev,
-      dico: loc.DICO,
+      dico: loc.dico,
       rcm: loc.data.rcm,
       latitude: loc.latitude,
       longitude: loc.longitude,
@@ -778,7 +778,7 @@ function criarRotasTempo(def: AdapterDefinition) {
     const itens: Array<z.infer<typeof ObservacaoEstacaoSchema>> = [];
     for (const [dataHora, estacoes] of Object.entries(dados)) {
       for (const [idEstacao, obs] of Object.entries(estacoes)) {
-        if (obs.temperatura === -99.0 && obs.humidade === -99.0 && obs.pressao === -99.0) continue;
+        if (!obs || (obs.temperatura === -99.0 && obs.humidade === -99.0 && obs.pressao === -99.0)) continue;
         itens.push({
           dataObservacao: dataHora,
           idEstacao,

@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // ---------------------------------------------------------------------------
 // Sources  (one row per registered adapter)
@@ -53,6 +53,7 @@ export const apiData = sqliteTable(
     locationId: text("location_id"),
     payload: text("payload").notNull(), // JSON
     tags: text("tags"), // JSON array
+    contentHash: text("content_hash").notNull(), // SHA-256 hex of payload
     scrapedAt: integer("scraped_at", { mode: "timestamp" }).notNull(),
   },
   (table) => [
@@ -61,6 +62,7 @@ export const apiData = sqliteTable(
     index("idx_api_data_location").on(table.locationId),
     index("idx_api_data_source_type").on(table.apiSource, table.payloadType),
     index("idx_api_data_source_type_time").on(table.apiSource, table.payloadType, table.timestamp),
+    uniqueIndex("idx_api_data_dedup").on(table.apiSource, table.payloadType, table.contentHash),
   ],
 );
 

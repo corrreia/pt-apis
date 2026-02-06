@@ -131,8 +131,8 @@ export type IpmaEstacao = z.infer<typeof IpmaEstacaoSchema>;
 
 export const IpmaPrevisaoDiariaItemSchema = z.object({
   precipitaProb: z.string(),
-  tMin: z.string(),
-  tMax: z.string(),
+  tMin: z.coerce.string(),
+  tMax: z.coerce.string(),
   predWindDir: z.string(),
   idWeatherType: z.number(),
   classWindSpeed: z.number(),
@@ -156,8 +156,8 @@ export type IpmaPrevisaoDiariaItem = z.infer<typeof IpmaPrevisaoDiariaItemSchema
 
 export const IpmaPrevisaoAgregadaItemSchema = z.object({
   precipitaProb: z.string(),
-  tMin: z.string(),
-  tMax: z.string(),
+  tMin: z.coerce.string(),
+  tMax: z.coerce.string(),
   predWindDir: z.string(),
   idWeatherType: z.number(),
   classWindSpeed: z.number(),
@@ -225,7 +225,7 @@ export const IpmaRiscoIncendioLocalSchema = z.object({
   data: z.object({
     rcm: z.number(),
   }),
-  DICO: z.string(),
+  dico: z.string(),
   latitude: z.number(),
   longitude: z.number(),
 });
@@ -266,10 +266,10 @@ export const IpmaObservacaoSchema = z.object({
   radiacao: z.number(),
 });
 
-/** Resposta em bruto: { "YYYY-mm-ddThh:mi": { "idEstacao": { ... } } } */
+/** Resposta em bruto: { "YYYY-mm-ddThh:mi": { "idEstacao": { ... } | null } } */
 export const IpmaObservacoesResponseSchema = z.record(
   z.string(),
-  z.record(z.string(), IpmaObservacaoSchema),
+  z.record(z.string(), IpmaObservacaoSchema.nullable()),
 );
 
 export type IpmaObservacao = z.infer<typeof IpmaObservacaoSchema>;

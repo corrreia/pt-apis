@@ -14,6 +14,22 @@ import type {
 } from "./adapter";
 
 // ---------------------------------------------------------------------------
+// Content hashing (deduplication)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute a SHA-256 hex digest of a string.
+ * Used to fingerprint payloads so duplicate data is silently skipped.
+ */
+async function sha256(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ---------------------------------------------------------------------------
 // Retry helper
 // ---------------------------------------------------------------------------
 
@@ -94,7 +110,8 @@ export async function registerLocation(
 
 /**
  * Store a row in api_data.
- * Returns the id of the inserted row.
+ * Duplicate payloads (same source + type + content hash) are silently skipped.
+ * Returns the id of the inserted (or already-existing) row.
  */
 export async function storeApiData(
   db: Db,
@@ -106,20 +123,28 @@ export async function storeApiData(
   const now = new Date();
   const timestamp = options?.timestamp ?? now;
   const scrapedAt = options?.scrapedAt ?? now;
+  const payloadJson = JSON.stringify(payload);
+  const contentHash = await sha256(payloadJson);
   const id = `${adapterId}:${payloadType}:${options?.locationId ?? "global"}:${timestamp.getTime()}:${crypto.randomUUID().slice(0, 8)}`;
 
   await withRetry(
     () =>
-      db.insert(apiData).values({
-        id,
-        apiSource: adapterId,
-        payloadType,
-        timestamp,
-        locationId: options?.locationId ?? null,
-        payload: JSON.stringify(payload),
-        tags: options?.tags ? JSON.stringify(options.tags) : null,
-        scrapedAt,
-      }),
+      db
+        .insert(apiData)
+        .values({
+          id,
+          apiSource: adapterId,
+          payloadType,
+          timestamp,
+          locationId: options?.locationId ?? null,
+          payload: payloadJson,
+          tags: options?.tags ? JSON.stringify(options.tags) : null,
+          contentHash,
+          scrapedAt,
+        })
+        .onConflictDoNothing({
+          target: [apiData.apiSource, apiData.payloadType, apiData.contentHash],
+        }),
     "storeApiData",
   );
 
@@ -127,16 +152,18 @@ export async function storeApiData(
 }
 
 /**
- * D1 max variables per statement is ~100 columns × rows.
- * api_data has 8 columns, so ~100 rows per chunk is safe with margin.
+ * Maximum number of single-row INSERT statements per db.batch() call.
+ * Each INSERT has 9 variables (one per column), so 50 × 9 = 450 vars max
+ * across the batch – well within D1/SQLite limits even on local miniflare.
  */
-const BATCH_CHUNK_SIZE = 100;
+const BATCH_STMT_LIMIT = 50;
 
 /**
  * Batch-insert multiple rows into api_data.
- * Chunks large arrays to stay within D1 statement limits and wraps
- * the entire operation in a transaction for atomicity.
- * Returns the ids of all inserted rows.
+ * Uses individual single-row INSERT statements grouped via db.batch()
+ * to avoid hitting per-statement SQL variable limits on miniflare.
+ * Duplicate payloads (same source + type + content hash) are silently skipped.
+ * Returns the ids of all attempted rows.
  */
 export async function storeBatchApiData(
   db: Db,
@@ -147,7 +174,12 @@ export async function storeBatchApiData(
   if (items.length === 0) return [];
 
   const now = new Date();
-  const rows = items.map((item) => {
+
+  // Compute hashes in parallel
+  const payloadsJson = items.map((item) => JSON.stringify(item.payload));
+  const hashes = await Promise.all(payloadsJson.map((json) => sha256(json)));
+
+  const rows = items.map((item, i) => {
     const timestamp = item.options?.timestamp ?? now;
     const scrapedAt = item.options?.scrapedAt ?? now;
     const id = `${adapterId}:${payloadType}:${item.options?.locationId ?? "global"}:${timestamp.getTime()}:${crypto.randomUUID().slice(0, 8)}`;
@@ -158,24 +190,32 @@ export async function storeBatchApiData(
       payloadType,
       timestamp,
       locationId: item.options?.locationId ?? null,
-      payload: JSON.stringify(item.payload),
+      payload: payloadsJson[i],
       tags: item.options?.tags ? JSON.stringify(item.options.tags) : null,
+      contentHash: hashes[i],
       scrapedAt,
     };
   });
 
-  // D1 supports batch() which wraps multiple statements in a transaction
+  // Use single-row inserts with onConflictDoNothing for dedup
   await withRetry(async () => {
-    if (rows.length <= BATCH_CHUNK_SIZE) {
-      await db.insert(apiData).values(rows);
-    } else {
-      const chunks: (typeof rows)[] = [];
-      for (let i = 0; i < rows.length; i += BATCH_CHUNK_SIZE) {
-        chunks.push(rows.slice(i, i + BATCH_CHUNK_SIZE));
-      }
-      // db.batch() requires a tuple with at least one element — we know chunks is non-empty
-      const statements = chunks.map((chunk) => db.insert(apiData).values(chunk));
+    const makeStmt = (row: (typeof rows)[number]) =>
+      db
+        .insert(apiData)
+        .values(row)
+        .onConflictDoNothing({
+          target: [apiData.apiSource, apiData.payloadType, apiData.contentHash],
+        });
+
+    if (rows.length <= BATCH_STMT_LIMIT) {
+      const statements = rows.map(makeStmt);
       await db.batch(statements as unknown as [typeof statements[0], ...typeof statements]);
+    } else {
+      for (let i = 0; i < rows.length; i += BATCH_STMT_LIMIT) {
+        const chunk = rows.slice(i, i + BATCH_STMT_LIMIT);
+        const statements = chunk.map(makeStmt);
+        await db.batch(statements as unknown as [typeof statements[0], ...typeof statements]);
+      }
     }
   }, "storeBatchApiData");
 
