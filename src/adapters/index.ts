@@ -7,5 +7,4 @@
  * When you create a new adapter, add a single import line below.
  */
 
-import "./ipma/adapter";
-import "./qualidade-ar/adapter";
+import "./tempo/adapter";
