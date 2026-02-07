@@ -8,3 +8,4 @@
  */
 
 import "./tempo/adapter";
+import "./sismos/adapter";
