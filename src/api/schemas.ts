@@ -27,8 +27,6 @@ export const LocalidadeResumoSchema = z
   .object({
     id: z.string().openapi({ description: "Identificador único (slug)", example: "lisboa" }),
     name: z.string().openapi({ description: "Nome da localização", example: "Lisboa" }),
-    district: z.string().nullable().openapi({ description: "Distrito", example: "Lisboa" }),
-    region: z.string().nullable().openapi({ description: "Região", example: "Lisboa" }),
     latitude: z.number().nullable().openapi({ description: "Latitude", example: 38.766 }),
     longitude: z.number().nullable().openapi({ description: "Longitude", example: -9.1286 }),
   })

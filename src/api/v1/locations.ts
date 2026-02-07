@@ -17,9 +17,6 @@ const LocationSchema = z
     latitude: z.number().nullable().openapi({ description: "Latitude" }),
     longitude: z.number().nullable().openapi({ description: "Longitude" }),
     type: z.string().openapi({ description: "Tipo (city, district, station, sensor)", example: "city" }),
-    region: z.string().nullable().openapi({ description: "Região", example: "Lisboa" }),
-    district: z.string().nullable().openapi({ description: "Distrito", example: "Lisboa" }),
-    municipality: z.string().nullable().openapi({ description: "Município" }),
     metadata: z.record(z.string(), z.unknown()).nullable().openapi({ description: "Metadados JSON adicionais" }),
   })
   .openapi("Location");
@@ -78,16 +75,6 @@ const listLocations = createRoute({
         param: { name: "type", in: "query" },
         description: "Filtrar por tipo (city, district, station, sensor)",
         example: "city",
-      }),
-      region: z.string().optional().openapi({
-        param: { name: "region", in: "query" },
-        description: "Filtrar por região",
-        example: "Norte",
-      }),
-      district: z.string().optional().openapi({
-        param: { name: "district", in: "query" },
-        description: "Filtrar por distrito",
-        example: "Porto",
       }),
       q: z.string().optional().openapi({
         param: { name: "q", in: "query" },
@@ -219,13 +206,11 @@ app.use("/v1/locations/*/data", kvCache({ ttlSeconds: 300, prefix: "locdata" }))
 app.use("/v1/locations/*/data", cacheControl(60, 120));
 
 app.openapi(listLocations, async (c) => {
-  const { type, region, district, q, limit, offset } = c.req.valid("query");
+  const { type, q, limit, offset } = c.req.valid("query");
   const db = getDb(c.env);
 
   const conditions = [];
   if (type) conditions.push(eq(locations.type, type));
-  if (region) conditions.push(eq(locations.region, region));
-  if (district) conditions.push(eq(locations.district, district));
   if (q) conditions.push(like(locations.name, `%${q}%`));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -248,9 +233,6 @@ app.openapi(listLocations, async (c) => {
     latitude: r.latitude,
     longitude: r.longitude,
     type: r.type,
-    region: r.region,
-    district: r.district,
-    municipality: r.municipality,
     metadata: r.metadata ? JSON.parse(r.metadata) : null,
   }));
 
@@ -279,9 +261,6 @@ app.openapi(getLocation, async (c) => {
         latitude: row.latitude,
         longitude: row.longitude,
         type: row.type,
-        region: row.region,
-        district: row.district,
-        municipality: row.municipality,
         metadata: row.metadata ? JSON.parse(row.metadata) : null,
       },
     },
@@ -337,9 +316,6 @@ app.openapi(getLocationData, async (c) => {
         latitude: loc.latitude,
         longitude: loc.longitude,
         type: loc.type,
-        region: loc.region,
-        district: loc.district,
-        municipality: loc.municipality,
         metadata: loc.metadata ? JSON.parse(loc.metadata) : null,
       },
       data: {

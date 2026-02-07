@@ -82,9 +82,6 @@ export async function registerLocation(
           latitude: loc.latitude ?? null,
           longitude: loc.longitude ?? null,
           type: loc.type,
-          region: loc.region ?? null,
-          district: loc.district ?? null,
-          municipality: loc.municipality ?? null,
           metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
         })
         .onConflictDoUpdate({
@@ -94,9 +91,6 @@ export async function registerLocation(
             latitude: loc.latitude ?? null,
             longitude: loc.longitude ?? null,
             type: loc.type,
-            region: loc.region ?? null,
-            district: loc.district ?? null,
-            municipality: loc.municipality ?? null,
             metadata: loc.metadata ? JSON.stringify(loc.metadata) : null,
           },
         }),

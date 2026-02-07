@@ -27,15 +27,10 @@ export const locations = sqliteTable(
     latitude: real("latitude"),
     longitude: real("longitude"),
     type: text("type").notNull(), // "city", "district", "station", "sensor"
-    region: text("region"), // "Centro", "Norte", "Algarve"
-    district: text("district"), // "Lisboa", "Porto"
-    municipality: text("municipality"), // "Lisboa", "Vila Nova de Gaia"
-    metadata: text("metadata"), // JSON
+    metadata: text("metadata"), // JSON — adapter-specific fields, administrative data, etc.
   },
   (table) => [
     index("loc_type_idx").on(table.type),
-    index("loc_district_idx").on(table.district),
-    index("loc_region_idx").on(table.region),
   ],
 );
 

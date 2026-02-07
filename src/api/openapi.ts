@@ -26,7 +26,7 @@ export function mountDocs(app: import("@hono/zod-openapi").OpenAPIHono<{ Binding
     info: {
       title: "Portugal Public Data API",
       description:
-        "API aberta que agrega, faz cache e serve dados públicos de fontes governamentais e institucionais portuguesas. Dados em api_data (JSON payloads) com location e timestamp consistentes. Cada adapter pode definir os seus próprios modelos e endpoints.",
+        "API aberta que agrega, faz cache e serve dados públicos de fontes governamentais e institucionais portuguesas. Localizações partilhadas com coordenadas e metadados enriquecidos via Nominatim (OpenStreetMap). Cada adapter define os seus próprios modelos e endpoints.",
       version: "1.0.0",
       contact: {
         name: "PT APIs Contributors",

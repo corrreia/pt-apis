@@ -62,8 +62,7 @@ async function fetchData(ctx: AdapterContext): Promise<void> {
   //   latitude: 38.7223,
   //   longitude: -9.1393,
   //   type: "city",           // "city", "station", "sensor", etc.
-  //   region: "Lisboa",
-  //   district: "Lisboa",
+  //   metadata: { region: "Lisboa" },  // any adapter-specific fields
   // });
 
   // ── Example: Batch-store api_data (recommended for multiple records) ─

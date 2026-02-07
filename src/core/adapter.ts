@@ -60,9 +60,7 @@ export interface LocationInput {
   longitude?: number;
   /** Location type: "city", "district", "station", "sensor", etc. */
   type: string;
-  region?: string;
-  district?: string;
-  municipality?: string;
+  /** Arbitrary metadata — adapter-specific fields, administrative data, etc. */
   metadata?: Record<string, unknown>;
 }
 

@@ -22,6 +22,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import type { AdapterDefinition, AdapterContext } from "../../core/adapter";
 import { registry } from "../../core/registry";
+import { locations } from "../../db/schema";
 import { kvCache, cacheControl } from "../../core/cache";
 import {
   // Schemas upstream
@@ -120,21 +121,68 @@ async function ipmaFetch<T>(url: string, schema: z.ZodType<T>): Promise<T> {
 // Handler de agendamento: Sincronizar locais do IPMA
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Nominatim reverse geocoding (OpenStreetMap)
+// ---------------------------------------------------------------------------
+
+const NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse";
+const NOMINATIM_USER_AGENT = "pt-apis/1.0 (https://github.com/corrreia/pt-apis)";
+
+interface NominatimAddress {
+  country?: string;
+  state?: string;
+  county?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  postcode?: string;
+  road?: string;
+}
+
+interface NominatimResult {
+  display_name?: string;
+  address?: NominatimAddress;
+}
+
+async function reverseGeocode(lat: number, lon: number): Promise<NominatimResult | null> {
+  try {
+    const url = `${NOMINATIM_URL}?lat=${lat}&lon=${lon}&format=json&accept-language=pt&zoom=10`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": NOMINATIM_USER_AGENT },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as NominatimResult;
+  } catch {
+    return null;
+  }
+}
+
+/** Sleep helper to respect Nominatim's 1 req/sec policy. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Handler de agendamento: Sincronizar locais do IPMA
+// ---------------------------------------------------------------------------
+
 async function sincronizarLocais(ctx: AdapterContext): Promise<void> {
   ctx.log("A sincronizar locais do IPMA...");
+
+  // Collect all locations to register, then enrich with Nominatim
+  const toRegister: Array<{ id: string; name: string; lat: number; lon: number; type: string; metadata: Record<string, unknown> }> = [];
 
   // Capitais de distrito e ilhas
   const locais = await ipmaFetch(URLS.locais, IpmaLocaisResponseSchema);
   for (const loc of locais.data) {
-    const slug = `ipma-${loc.globalIdLocal}`;
-    await ctx.registerLocation({
-      id: slug,
+    toRegister.push({
+      id: `ipma-${loc.globalIdLocal}`,
       name: loc.local,
-      latitude: parseFloat(loc.latitude),
-      longitude: parseFloat(loc.longitude),
+      lat: parseFloat(loc.latitude),
+      lon: parseFloat(loc.longitude),
       type: "city",
-      region: nomeRegiao(loc.idRegiao),
       metadata: {
+        regiao: nomeRegiao(loc.idRegiao),
         globalIdLocal: loc.globalIdLocal,
         idDistrito: loc.idDistrito,
         idConcelho: loc.idConcelho,
@@ -147,15 +195,14 @@ async function sincronizarLocais(ctx: AdapterContext): Promise<void> {
   // Locais costeiros
   const costeiros = await ipmaFetch(URLS.locaisCosteiros, IpmaLocaisCosteirosResponseSchema);
   for (const loc of costeiros) {
-    const slug = `ipma-mar-${loc.globalIdLocal}`;
-    await ctx.registerLocation({
-      id: slug,
+    toRegister.push({
+      id: `ipma-mar-${loc.globalIdLocal}`,
       name: loc.local,
-      latitude: parseFloat(loc.latitude),
-      longitude: parseFloat(loc.longitude),
+      lat: parseFloat(loc.latitude),
+      lon: parseFloat(loc.longitude),
       type: "coastal",
-      region: nomeRegiao(loc.idRegiao),
       metadata: {
+        regiao: nomeRegiao(loc.idRegiao),
         globalIdLocal: loc.globalIdLocal,
         idLocal: loc.idLocal,
         idAreaAviso: loc.idAreaAviso,
@@ -167,17 +214,82 @@ async function sincronizarLocais(ctx: AdapterContext): Promise<void> {
   // Estações meteorológicas
   const estacoes = await ipmaFetch(URLS.estacoes, IpmaEstacoesResponseSchema);
   for (const estacao of estacoes) {
-    const slug = `ipma-estacao-${estacao.properties.idEstacao}`;
-    await ctx.registerLocation({
-      id: slug,
+    toRegister.push({
+      id: `ipma-estacao-${estacao.properties.idEstacao}`,
       name: estacao.properties.localEstacao,
-      latitude: estacao.geometry.coordinates[1],
-      longitude: estacao.geometry.coordinates[0],
+      lat: estacao.geometry.coordinates[1],
+      lon: estacao.geometry.coordinates[0],
       type: "station",
       metadata: {
         idEstacao: estacao.properties.idEstacao,
       },
     });
+  }
+
+  // Check which locations already have Nominatim data (skip re-geocoding)
+  const existingLocs = await ctx.db
+    .select({ id: locations.id, metadata: locations.metadata })
+    .from(locations);
+  const enrichedIds = new Set(
+    existingLocs
+      .filter((l) => {
+        if (!l.metadata) return false;
+        try {
+          const m = JSON.parse(l.metadata);
+          return m.nominatim != null;
+        } catch { return false; }
+      })
+      .map((l) => l.id),
+  );
+
+  // Register all locations first
+  for (const loc of toRegister) {
+    await ctx.registerLocation({
+      id: loc.id,
+      name: loc.name,
+      latitude: loc.lat,
+      longitude: loc.lon,
+      type: loc.type,
+      metadata: loc.metadata,
+    });
+  }
+
+  // Enrich unenriched locations with Nominatim reverse geocoding
+  const needEnrichment = toRegister.filter(
+    (l) => !enrichedIds.has(l.id) && !isNaN(l.lat) && !isNaN(l.lon),
+  );
+
+  if (needEnrichment.length > 0) {
+    ctx.log(`A enriquecer ${needEnrichment.length} locais com dados do Nominatim (OpenStreetMap)...`);
+
+    for (const loc of needEnrichment) {
+      const result = await reverseGeocode(loc.lat, loc.lon);
+      if (result?.address) {
+        const enrichedMetadata = {
+          ...loc.metadata,
+          nominatim: {
+            pais: result.address.country,
+            distrito: result.address.state,
+            concelho: result.address.county,
+            cidade: result.address.city ?? result.address.town ?? result.address.village,
+            codigoPostal: result.address.postcode,
+            nomeCompleto: result.display_name,
+          },
+        };
+        await ctx.registerLocation({
+          id: loc.id,
+          name: loc.name,
+          latitude: loc.lat,
+          longitude: loc.lon,
+          type: loc.type,
+          metadata: enrichedMetadata,
+        });
+      }
+      // Respect Nominatim TOS: max 1 request per second
+      await sleep(1100);
+    }
+
+    ctx.log(`Enriquecimento concluído.`);
   }
 
   ctx.log(`Sincronizados ${locais.data.length} locais, ${costeiros.length} locais costeiros e ${estacoes.length} estações.`);
